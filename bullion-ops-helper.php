@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, and cache purges. Used by Bullion Media ops tooling.
- * Version: 0.3.1
+ * Version: 0.3.2
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.3.1' );
+define( 'BULLION_OPS_VERSION', '0.3.2' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
