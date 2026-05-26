@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, and cache purges. Used by Bullion Media ops tooling.
- * Version: 0.3.2
+ * Version: 0.4.0
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.3.2' );
+define( 'BULLION_OPS_VERSION', '0.4.0' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -250,27 +250,43 @@ function bullion_ops_elementor_regenerate( WP_REST_Request $req ) {
 
 	$results = [ 'post_id' => $post_id, 'post_title' => $post->post_title ];
 
-	try {
-		$document = \Elementor\Plugin::$instance->documents->get( $post_id );
-		if ( ! $document ) {
-			return new WP_Error( 'bullion_not_elementor', "Post {$post_id} is not an Elementor document", [ 'status' => 412 ] );
+	// GUARD: only run the Elementor document-save path on pages that were
+	// actually built in Elementor. For HTML-in-Classic-Editor pages, calling
+	// $document->save() with empty elements data wipes post_content — a
+	// 0.3.2 bug that blanked the QMines /is-copper-a-good-investment/
+	// pillar before the guard was added. Detected via _elementor_edit_mode
+	// post meta: 'builder' means Elementor-managed; empty means not.
+	$edit_mode = get_post_meta( $post_id, '_elementor_edit_mode', true );
+	$is_elementor_page = ( $edit_mode === 'builder' );
+
+	if ( $is_elementor_page ) {
+		try {
+			$document = \Elementor\Plugin::$instance->documents->get( $post_id );
+			if ( ! $document ) {
+				return new WP_Error( 'bullion_not_elementor', "Post {$post_id} is registered as Elementor but no document loaded", [ 'status' => 412 ] );
+			}
+
+			// Same code path as the editor's Update button.
+			$saved = $document->save( [
+				'elements' => $document->get_elements_data(),
+				'settings' => $document->get_settings(),
+			] );
+
+			$results['document_save'] = is_wp_error( $saved ) ? 'error: ' . $saved->get_error_message() : 'ok';
+
+			if ( class_exists( '\\Elementor\\Core\\Files\\CSS\\Post' ) ) {
+				$css_file = \Elementor\Core\Files\CSS\Post::create( $post_id );
+				$css_file->update();
+				$results['css'] = 'regenerated';
+			}
+		} catch ( \Throwable $e ) {
+			return new WP_Error( 'bullion_elementor_error', $e->getMessage(), [ 'status' => 500 ] );
 		}
-
-		// Same code path as the editor's Update button.
-		$saved = $document->save( [
-			'elements' => $document->get_elements_data(),
-			'settings' => $document->get_settings(),
-		] );
-
-		$results['document_save'] = is_wp_error( $saved ) ? 'error: ' . $saved->get_error_message() : 'ok';
-
-		if ( class_exists( '\\Elementor\\Core\\Files\\CSS\\Post' ) ) {
-			$css_file = \Elementor\Core\Files\CSS\Post::create( $post_id );
-			$css_file->update();
-			$results['css'] = 'regenerated';
-		}
-	} catch ( \Throwable $e ) {
-		return new WP_Error( 'bullion_elementor_error', $e->getMessage(), [ 'status' => 500 ] );
+	} else {
+		// Non-Elementor page (HTML in Classic Editor, Gutenberg blocks, etc).
+		// Skip document save + CSS regen — they don't apply and the save would
+		// wipe post_content. Just invalidate WP caches + purge upstream caches.
+		$results['document_save'] = 'skipped: not an Elementor page';
 	}
 
 	clean_post_cache( $post_id );
