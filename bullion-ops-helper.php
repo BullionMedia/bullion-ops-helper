@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, and a branded restyle of the asx_announcement CPT archive. Used by Bullion Media ops tooling.
- * Version: 0.5.0
+ * Version: 0.5.1
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.5.0' );
+define( 'BULLION_OPS_VERSION', '0.5.1' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -124,7 +124,9 @@ body.post-type-archive-asx_announcement .page-content {
   font-family:'Muli',sans-serif;
 }
 body.post-type-archive-asx_announcement article.post {
-  display:block;background:#fff;border-bottom:1px solid #e8eded;
+  display:grid;grid-template-columns:40% 1fr;grid-column-gap:40px;
+  align-items:start;
+  background:#fff;border-bottom:1px solid #e8eded;
   padding:24px 0;transition:background .2s;
 }
 body.post-type-archive-asx_announcement article.post:first-of-type {
@@ -132,12 +134,14 @@ body.post-type-archive-asx_announcement article.post:first-of-type {
 }
 body.post-type-archive-asx_announcement article.post:hover {background:#f8fbf9}
 body.post-type-archive-asx_announcement article.post .qm-asx-meta {
+  grid-column:1;grid-row:1;
   font-size:12px;color:#4CA565;font-weight:600;text-transform:uppercase;
   letter-spacing:1.6px;margin:0 0 8px;line-height:1.2;
 }
 body.post-type-archive-asx_announcement article.post .entry-title {
+  grid-column:1;grid-row:2;
   font-family:'Muli',sans-serif;font-size:20px;font-weight:600;
-  color:#142934;line-height:1.3;margin:0 0 10px 0;
+  color:#142934;line-height:1.3;margin:0;
 }
 body.post-type-archive-asx_announcement article.post .entry-title a {
   color:#142934;text-decoration:none;
@@ -145,8 +149,17 @@ body.post-type-archive-asx_announcement article.post .entry-title a {
 body.post-type-archive-asx_announcement article.post .entry-title a:hover {
   color:#4CA565;
 }
-body.post-type-archive-asx_announcement article.post p {
-  margin:0;color:#2a3d44;font-size:15px;line-height:1.6;max-width:760px;
+body.post-type-archive-asx_announcement article.post > p:not(.qm-asx-meta) {
+  grid-column:2;grid-row:1 / span 2;
+  align-self:center;
+  margin:0;color:#2a3d44;font-size:15px;line-height:1.6;
+}
+@media (max-width:768px) {
+  body.post-type-archive-asx_announcement article.post {
+    display:block;
+  }
+  body.post-type-archive-asx_announcement article.post .entry-title {margin:0 0 10px 0}
+  body.post-type-archive-asx_announcement article.post > p:not(.qm-asx-meta) {margin-top:0}
 }
 @media (max-width:600px) {
   body.post-type-archive-asx_announcement .page-header {padding:40px 16px 16px}
