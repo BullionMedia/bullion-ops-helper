@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, and a branded restyle of the asx_announcement CPT archive. Used by Bullion Media ops tooling.
- * Version: 0.5.4
+ * Version: 0.5.5
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.5.4' );
+define( 'BULLION_OPS_VERSION', '0.5.5' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -127,7 +127,7 @@ body.post-type-archive-asx_announcement article.post {
   display:grid;grid-template-columns:30% 1fr;grid-column-gap:32px;
   align-items:center;
   background:#fff;border-bottom:1px solid #e8eded;
-  padding:14px 0;transition:background .2s;
+  padding:14px 20px;transition:background .2s;
 }
 body.post-type-archive-asx_announcement article.post:first-of-type {
   border-top:1px solid #e8eded;
@@ -159,7 +159,7 @@ body.post-type-archive-asx_announcement article.post > p:not(.qm-asx-meta) {
 @media (max-width:768px) {
   body.post-type-archive-asx_announcement article.post {
     display:grid;grid-template-columns:1fr;grid-template-rows:auto auto auto;
-    grid-column-gap:0;padding:16px 0;
+    grid-column-gap:0;padding:16px 20px;
   }
   body.post-type-archive-asx_announcement article.post .qm-asx-meta {
     grid-column:1;grid-row:1;margin:0 0 4px;
