@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, and a branded restyle of the asx_announcement CPT archive. Used by Bullion Media ops tooling.
- * Version: 0.5.2
+ * Version: 0.5.3
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.5.2' );
+define( 'BULLION_OPS_VERSION', '0.5.3' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -124,7 +124,7 @@ body.post-type-archive-asx_announcement .page-content {
   font-family:'Muli',sans-serif;
 }
 body.post-type-archive-asx_announcement article.post {
-  display:grid;grid-template-columns:40% 1fr;grid-column-gap:32px;
+  display:grid;grid-template-columns:30% 1fr;grid-column-gap:32px;
   align-items:center;
   background:#fff;border-bottom:1px solid #e8eded;
   padding:14px 0;transition:background .2s;
