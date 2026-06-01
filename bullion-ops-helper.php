@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
- * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, and cache purges. Used by Bullion Media ops tooling.
- * Version: 0.4.0
+ * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, and a branded restyle of the asx_announcement CPT archive. Used by Bullion Media ops tooling.
+ * Version: 0.5.0
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.4.0' );
+define( 'BULLION_OPS_VERSION', '0.5.0' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -76,6 +76,86 @@ function bullion_ops_register_routes() {
 
 function bullion_ops_permission() {
 	return current_user_can( 'manage_options' );
+}
+
+// --- ASX Announcement archive — branded horizontal-row layout --------------
+//
+// Restyles /asx-announcements/ (the asx_announcement CPT archive) into a
+// QMines-branded horizontal-row layout: green uppercase date eyebrow, dark
+// teal title, body excerpt, hairline divider per row. No feature images.
+//
+// Active on every WP site that has the asx_announcement CPT registered. If
+// that CPT isn't present, the hooks below are no-ops.
+//
+// Two hooks:
+//  1. the_excerpt filter — prepends the post date as <p class="qm-asx-meta">
+//     above each archive excerpt.
+//  2. wp_head action — injects scoped CSS only when on the archive page.
+
+add_filter( 'the_excerpt', 'bullion_ops_asx_archive_inject_date', 5 );
+
+function bullion_ops_asx_archive_inject_date( $excerpt ) {
+	if ( ! is_post_type_archive( 'asx_announcement' ) || ! in_the_loop() ) {
+		return $excerpt;
+	}
+	$date = get_the_date( 'j F Y' );
+	return '<p class="qm-asx-meta"><time>' . esc_html( $date ) . '</time></p>' . $excerpt;
+}
+
+add_action( 'wp_head', 'bullion_ops_asx_archive_inject_css', 100 );
+
+function bullion_ops_asx_archive_inject_css() {
+	if ( ! is_post_type_archive( 'asx_announcement' ) ) {
+		return;
+	}
+	?>
+<style id="bullion-ops-asx-archive-css">
+body.post-type-archive-asx_announcement .page-header {
+  max-width:1100px;margin:0 auto;padding:60px 20px 20px;text-align:left;
+}
+body.post-type-archive-asx_announcement .page-header .entry-title {
+  font-family:'Muli',sans-serif;font-size:32px;font-weight:600;color:#142934;
+}
+body.post-type-archive-asx_announcement .page-header .entry-title span {
+  font-weight:400;display:inline;
+}
+body.post-type-archive-asx_announcement .page-content {
+  max-width:1100px;margin:0 auto;padding:20px 20px 80px;
+  font-family:'Muli',sans-serif;
+}
+body.post-type-archive-asx_announcement article.post {
+  display:block;background:#fff;border-bottom:1px solid #e8eded;
+  padding:24px 0;transition:background .2s;
+}
+body.post-type-archive-asx_announcement article.post:first-of-type {
+  border-top:1px solid #e8eded;
+}
+body.post-type-archive-asx_announcement article.post:hover {background:#f8fbf9}
+body.post-type-archive-asx_announcement article.post .qm-asx-meta {
+  font-size:12px;color:#4CA565;font-weight:600;text-transform:uppercase;
+  letter-spacing:1.6px;margin:0 0 8px;line-height:1.2;
+}
+body.post-type-archive-asx_announcement article.post .entry-title {
+  font-family:'Muli',sans-serif;font-size:20px;font-weight:600;
+  color:#142934;line-height:1.3;margin:0 0 10px 0;
+}
+body.post-type-archive-asx_announcement article.post .entry-title a {
+  color:#142934;text-decoration:none;
+}
+body.post-type-archive-asx_announcement article.post .entry-title a:hover {
+  color:#4CA565;
+}
+body.post-type-archive-asx_announcement article.post p {
+  margin:0;color:#2a3d44;font-size:15px;line-height:1.6;max-width:760px;
+}
+@media (max-width:600px) {
+  body.post-type-archive-asx_announcement .page-header {padding:40px 16px 16px}
+  body.post-type-archive-asx_announcement .page-header .entry-title {font-size:26px}
+  body.post-type-archive-asx_announcement .page-content {padding:16px 16px 60px}
+  body.post-type-archive-asx_announcement article.post .entry-title {font-size:18px}
+}
+</style>
+	<?php
 }
 
 function bullion_ops_ping() {
