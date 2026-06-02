@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
- * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, and shared CSS for In Summary / FAQ blocks pasted into Elementor HTML widgets. Used by Bullion Media ops tooling.
- * Version: 0.6.1
+ * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
+ * Version: 0.7.0
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.6.1' );
+define( 'BULLION_OPS_VERSION', '0.7.0' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -502,6 +502,48 @@ function bullion_ops_inject_project_faq_css() {
 }
 </style>
 	<?php
+}
+
+// Shortcode for Elementor placement.
+//
+// Operator adds an Elementor "Shortcode" widget where they want the FAQ +
+// In Summary block, types [qmines_project_faq], saves. Plugin renders the
+// HTML for the current page (matched by slug) inline.
+//
+// Returns empty string for pages that don't have project FAQ data, so the
+// shortcode is safe to drop in templates / reusable blocks without
+// erroring on non-project pages.
+
+add_shortcode( 'qmines_project_faq', 'bullion_ops_project_faq_shortcode' );
+
+function bullion_ops_project_faq_shortcode( $atts = [] ) {
+	$post = get_post();
+	if ( ! $post ) {
+		return '';
+	}
+	$data = bullion_ops_get_project_faq_data();
+	if ( ! isset( $data[ $post->post_name ] ) ) {
+		return '';
+	}
+	return bullion_ops_render_project_faq_html( $data[ $post->post_name ] );
+}
+
+function bullion_ops_render_project_faq_html( $page ) {
+	$out  = "\n<section class=\"bullion-ops-project-summary\">";
+	$out .= '<h2>In Summary</h2>';
+	$out .= '<p>' . esc_html( $page['in_summary'] ) . '</p>';
+	$out .= "</section>\n";
+
+	$out .= '<section class="bullion-ops-project-faq">';
+	$out .= '<h2>Frequently Asked Questions</h2>';
+	foreach ( $page['faqs'] as $faq ) {
+		$out .= '<details>';
+		$out .= '<summary>' . esc_html( $faq['q'] ) . '</summary>';
+		$out .= '<p>' . esc_html( $faq['a'] ) . '</p>';
+		$out .= '</details>';
+	}
+	$out .= "</section>\n";
+	return $out;
 }
 
 function bullion_ops_render_project_faq_jsonld( $page ) {
