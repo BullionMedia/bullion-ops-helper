@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
- * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, and a branded restyle of the asx_announcement CPT archive. Used by Bullion Media ops tooling.
- * Version: 0.5.5
+ * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, and FAQ + In Summary injection on QMines project pages. Used by Bullion Media ops tooling.
+ * Version: 0.6.0
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.5.5' );
+define( 'BULLION_OPS_VERSION', '0.6.0' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -401,6 +401,180 @@ function bullion_ops_elementor_regenerate( WP_REST_Request $req ) {
 	$results['regenerated'] = true;
 
 	return rest_ensure_response( $results );
+}
+
+// --- Project page FAQ + In Summary injection -------------------------------
+//
+// Appends an "In Summary" closer + FAQ section (HTML5 <details> toggles) +
+// matching FAQPage JSON-LD schema to the QMines project pages (Mt Chalmers,
+// Develin Creek, Mt Mackenzie).
+//
+// Page matching is slug-based so the same plugin behaves correctly on dev
+// and live (page IDs match across both sites today, but slugs are more
+// durable across future cPanel pushes).
+//
+// FAQ answers stay in the rendered DOM (CSS-collapsed via <details>) so
+// Google's FAQPage rich-result rules + AEO engines (Perplexity, Claude,
+// ChatGPT) treat them as discoverable.
+
+add_filter( 'the_content', 'bullion_ops_inject_project_faq', 100 );
+
+function bullion_ops_inject_project_faq( $content ) {
+	if ( ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
+		return $content;
+	}
+
+	$post = get_post();
+	if ( ! $post ) {
+		return $content;
+	}
+
+	$data = bullion_ops_get_project_faq_data();
+	if ( ! isset( $data[ $post->post_name ] ) ) {
+		return $content;
+	}
+
+	$page = $data[ $post->post_name ];
+	return $content
+		. bullion_ops_render_project_faq_html( $page )
+		. bullion_ops_render_project_faq_jsonld( $page );
+}
+
+add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
+
+function bullion_ops_inject_project_faq_css() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post ) {
+		return;
+	}
+	$data = bullion_ops_get_project_faq_data();
+	if ( ! isset( $data[ $post->post_name ] ) ) {
+		return;
+	}
+	?>
+<style id="bullion-ops-project-faq-css">
+.bullion-ops-project-summary,
+.bullion-ops-project-faq {
+  max-width:1100px;margin:32px auto;padding:0 20px;
+  font-family:'Muli',sans-serif;color:#142934;
+}
+.bullion-ops-project-summary h2,
+.bullion-ops-project-faq h2 {
+  font-size:24px;font-weight:600;color:#142934;margin:0 0 16px;
+}
+.bullion-ops-project-summary p {
+  font-size:16px;line-height:1.6;color:#3a4a52;margin:0;
+}
+.bullion-ops-project-faq details {
+  border-bottom:1px solid #e8eded;padding:14px 0;
+}
+.bullion-ops-project-faq details:first-of-type {
+  border-top:1px solid #e8eded;
+}
+.bullion-ops-project-faq summary {
+  cursor:pointer;font-size:16px;font-weight:600;color:#142934;
+  list-style:none;padding-right:28px;position:relative;
+}
+.bullion-ops-project-faq summary::-webkit-details-marker {display:none}
+.bullion-ops-project-faq summary::after {
+  content:'+';position:absolute;right:0;top:0;
+  font-size:20px;color:#4CA565;font-weight:400;
+  transition:transform .2s;
+}
+.bullion-ops-project-faq details[open] summary::after {
+  content:'\2212';
+}
+.bullion-ops-project-faq summary:hover {color:#4CA565}
+.bullion-ops-project-faq details p {
+  margin:12px 0 0;font-size:15px;line-height:1.6;color:#3a4a52;
+}
+@media (max-width:600px) {
+  .bullion-ops-project-summary,
+  .bullion-ops-project-faq {padding:0 16px;margin:24px auto}
+  .bullion-ops-project-summary h2,
+  .bullion-ops-project-faq h2 {font-size:20px}
+}
+</style>
+	<?php
+}
+
+function bullion_ops_render_project_faq_html( $page ) {
+	$out  = "\n<section class=\"bullion-ops-project-summary\">";
+	$out .= '<h2>In Summary</h2>';
+	$out .= '<p>' . esc_html( $page['in_summary'] ) . '</p>';
+	$out .= "</section>\n";
+
+	$out .= '<section class="bullion-ops-project-faq">';
+	$out .= '<h2>Frequently Asked Questions</h2>';
+	foreach ( $page['faqs'] as $faq ) {
+		$out .= '<details>';
+		$out .= '<summary>' . esc_html( $faq['q'] ) . '</summary>';
+		$out .= '<p>' . esc_html( $faq['a'] ) . '</p>';
+		$out .= '</details>';
+	}
+	$out .= "</section>\n";
+	return $out;
+}
+
+function bullion_ops_render_project_faq_jsonld( $page ) {
+	$main_entity = [];
+	foreach ( $page['faqs'] as $faq ) {
+		$main_entity[] = [
+			'@type'          => 'Question',
+			'name'           => $faq['q'],
+			'acceptedAnswer' => [
+				'@type' => 'Answer',
+				'text'  => $faq['a'],
+			],
+		];
+	}
+	$schema = [
+		'@context'   => 'https://schema.org',
+		'@type'      => 'FAQPage',
+		'mainEntity' => $main_entity,
+	];
+	return "\n<script type=\"application/ld+json\">"
+		. wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+		. "</script>\n";
+}
+
+function bullion_ops_get_project_faq_data() {
+	return [
+		'mt-chalmers' => [
+			'in_summary' => 'Mt Chalmers is QMines\' flagship development project, a high-grade copper-gold deposit 17km from Rockhampton with a completed Pre-Feasibility Study, five resource upgrades in under three years, and a current JORC resource of 11.86Mt at 1.22% copper equivalent. The project\'s shallow open-pit geometry, proximity to established infrastructure, and 316km² of tenure underpin QMines\' strategy of transitioning Mt Chalmers toward production. With 84% of resources in the Measured and Indicated JORC categories, Mt Chalmers represents the company\'s most advanced asset and its primary value-creation pathway.',
+			'faqs' => [
+				[ 'q' => 'Where is the Mt Chalmers project located?',           'a' => 'Mt Chalmers is located 17km north-east of Rockhampton in Queensland, Australia. QMines holds 316km² of tenure at the project.' ],
+				[ 'q' => 'What commodities does Mt Chalmers produce?',          'a' => 'Mt Chalmers is a copper and gold project. The Pre-Feasibility Study defined a contained metal inventory of 65,000 tonnes of copper, 160,000 ounces of gold, 30,600 tonnes of zinc, 1.8 million ounces of silver, and 583,000 tonnes of pyrite.' ],
+				[ 'q' => 'What is the current JORC resource estimate for Mt Chalmers?', 'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.86Mt at 1.22% contained copper equivalent. 84% of these Resources fall in the Measured and Indicated JORC categories, reflecting five resource upgrades completed in under three years.' ],
+				[ 'q' => 'What did the Pre-Feasibility Study show for Mt Chalmers?', 'a' => 'The Pre-Feasibility Study returned a post-tax NPV at an 8% discount rate of $100 million, based on a 1Mtpa processing plant. The study also established a maiden Ore Reserve estimate (Proved and Probable categories).' ],
+				[ 'q' => 'What stage of development is Mt Chalmers at?',        'a' => 'Mt Chalmers is in the development phase. QMines\' strategy involves transitioning the project toward production, leveraging its shallow high-grade open-pit geometry, coastal proximity, and existing infrastructure access.' ],
+				[ 'q' => 'Who owns the Mt Chalmers project?',                   'a' => 'QMines Limited (ASX:QML) holds 100% of the Mt Chalmers project.' ],
+			],
+		],
+		'develin-creek' => [
+			'in_summary' => 'Develin Creek is a high-grade copper and zinc project located approximately 90km west of Rockhampton, Queensland, acquired by QMines in September 2024. The project hosts a JORC resource of 4.13Mt at 1.37% copper equivalent for 56,581 tonnes of copper equivalent across several Volcanic Hosted Massive Sulphide deposits, with 70% of that resource in the Indicated category. Its proximity to the Mt Chalmers project positions Develin Creek as a potential contributor to QMines\' broader production hub strategy.',
+			'faqs' => [
+				[ 'q' => 'Where is the Develin Creek project located?',         'a' => 'Develin Creek is located approximately 90km west of Rockhampton in Queensland, Australia. The project covers EPM 17604 and EPM 16749, totalling 272km² of tenure.' ],
+				[ 'q' => 'What commodities does Develin Creek contain?',        'a' => 'Develin Creek contains copper, zinc, gold and silver mineralisation hosted in several Volcanic Hosted Massive Sulphide (VHMS) deposits, including the Sulphide City, Scorpion and Window deposits.' ],
+				[ 'q' => 'What is the JORC resource estimate for Develin Creek?', 'a' => 'The Develin Creek Resource stands at 4.13Mt at 1.37% CuEq for 56,581 tonnes of copper equivalent. 70% of this Resource sits in the Indicated JORC category.' ],
+				[ 'q' => 'When did QMines acquire Develin Creek?',              'a' => 'QMines completed the 100% acquisition of the Develin Creek copper and zinc project from Zenith Minerals Limited on 30 September 2024.' ],
+				[ 'q' => 'What is the strategic relationship between Develin Creek and Mt Chalmers?', 'a' => 'Develin Creek\'s proximity to QMines\' Mt Chalmers project creates potential for the combined development of both resources. QMines has identified this geographic relationship as a factor in its broader production hub strategy.' ],
+			],
+		],
+		'mt-mackenzie' => [
+			'in_summary' => 'Mt Mackenzie is a 100%-owned gold and silver project located approximately 140km northwest of Rockhampton, Queensland, carrying a JORC resource of 3.35Mt at 1.40g/t gold and 8.4g/t silver for 129,000 ounces of gold and 862,000 ounces of silver. The project holds a granted Mining Development Licence (MDL 2008), completed Scoping Study, and freehold land, supporting its near-term development potential. Located 45km from Develin Creek, Mt Mackenzie forms part of QMines\' emerging central Queensland production hub.',
+			'faqs' => [
+				[ 'q' => 'Where is the Mt Mackenzie project located?',          'a' => 'Mt Mackenzie is located approximately 140km northwest of Rockhampton in Queensland, Australia, and approximately 45km from QMines\' Develin Creek project.' ],
+				[ 'q' => 'What commodities does Mt Mackenzie contain?',         'a' => 'Mt Mackenzie is a gold and silver project, with shallow high-grade oxide and primary mineralisation suited to open-pit mining.' ],
+				[ 'q' => 'What is the JORC resource estimate for Mt Mackenzie?', 'a' => 'The Mt Mackenzie Mineral Resource Estimate stands at 3.35Mt at 1.40g/t gold and 8.4g/t silver, for 129,000 ounces of gold and 862,000 ounces of silver. Nearly half of the Resource is classified in the Indicated JORC category, and the deposit remains open in multiple directions.' ],
+				[ 'q' => 'What approvals and studies has Mt Mackenzie completed?', 'a' => 'Mt Mackenzie holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land. The project is currently undergoing further PFS-level work.' ],
+				[ 'q' => 'When did QMines acquire Mt Mackenzie?',               'a' => 'QMines acquired Mt Mackenzie from Resources and Energy Group in mid-2025.' ],
+			],
+		],
+	];
 }
 
 // --- Cache purge -----------------------------------------------------------
