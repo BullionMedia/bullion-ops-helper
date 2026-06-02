@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.7.2
+ * Version: 0.7.3
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.7.2' );
+define( 'BULLION_OPS_VERSION', '0.7.3' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -401,6 +401,54 @@ function bullion_ops_elementor_regenerate( WP_REST_Request $req ) {
 	$results['regenerated'] = true;
 
 	return rest_ensure_response( $results );
+}
+
+// --- Muli WOFF2 override (perf) --------------------------------------------
+//
+// Elementor's Custom Fonts feature only emits @font-face rules pointing at
+// the TTF files the operator uploaded (.ttf, ~92 KB each, 5 weights). On
+// mobile this blocks render until the TTFs download (FCP ~9.8s observed).
+//
+// This hook ships WOFF2 versions bundled in the plugin (assets/fonts/)
+// and emits @font-face overrides at wp_head priority 999, after Elementor's
+// rules. Same family name + same font-weight values means our rules win
+// the cascade. Browsers fetch WOFF2 (~33 KB each, 65% smaller); Elementor's
+// TTF rules stay as a fallback for ancient clients that don't support WOFF2.
+//
+// Weight mapping (matches Elementor's Custom Fonts config on dev 2026-06-03):
+//   300 → Muli-Regular     500 → Muli-Bold       700 → Muli-Black
+//   400 → Muli-SemiBold    600 → Muli-ExtraBold
+//
+// Add `font-display: swap` to avoid FOIT on slow networks. font-display is
+// already swap on Elementor's rules; we mirror it.
+
+add_action( 'wp_head', 'bullion_ops_inject_muli_woff2', 999 );
+
+function bullion_ops_inject_muli_woff2() {
+	$base = plugins_url( 'assets/fonts', __FILE__ );
+	$weights = [
+		300 => 'Muli-Regular.woff2',
+		400 => 'Muli-SemiBold.woff2',
+		500 => 'Muli-Bold.woff2',
+		600 => 'Muli-ExtraBold.woff2',
+		700 => 'Muli-Black.woff2',
+	];
+	echo "\n<style id=\"bullion-ops-muli-woff2\">\n";
+	foreach ( $weights as $weight => $file ) {
+		echo "@font-face{font-family:Muli;font-style:normal;font-weight:{$weight};font-display:swap;src:url('" . esc_url( "{$base}/{$file}" ) . "') format('woff2')}\n";
+	}
+	echo "</style>\n";
+}
+
+add_filter( 'upload_mimes', 'bullion_ops_allow_font_mime_types' );
+
+function bullion_ops_allow_font_mime_types( $mimes ) {
+	// Allow font uploads via WP media library (REST + admin) for future
+	// font-perf work without needing per-file plugin releases.
+	$mimes['woff2'] = 'font/woff2';
+	$mimes['woff']  = 'font/woff';
+	$mimes['ttf']   = 'font/ttf';
+	return $mimes;
 }
 
 // --- Project page FAQ + In Summary support ---------------------------------
