@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
- * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, and FAQ + In Summary injection on QMines project pages. Used by Bullion Media ops tooling.
- * Version: 0.6.0
+ * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, and shared CSS for In Summary / FAQ blocks pasted into Elementor HTML widgets. Used by Bullion Media ops tooling.
+ * Version: 0.6.1
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.6.0' );
+define( 'BULLION_OPS_VERSION', '0.6.1' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -403,41 +403,44 @@ function bullion_ops_elementor_regenerate( WP_REST_Request $req ) {
 	return rest_ensure_response( $results );
 }
 
-// --- Project page FAQ + In Summary injection -------------------------------
+// --- Project page FAQ + In Summary support ---------------------------------
 //
-// Appends an "In Summary" closer + FAQ section (HTML5 <details> toggles) +
-// matching FAQPage JSON-LD schema to the QMines project pages (Mt Chalmers,
-// Develin Creek, Mt Mackenzie).
+// Two responsibilities for the three QMines project pages (Mt Chalmers,
+// Develin Creek, Mt Mackenzie):
 //
-// Page matching is slug-based so the same plugin behaves correctly on dev
-// and live (page IDs match across both sites today, but slugs are more
-// durable across future cPanel pushes).
+//  1. wp_head — output FAQPage JSON-LD schema so AEO engines + Google rich
+//     results work. Source of truth for the Q&A content lives in this
+//     plugin so the operator can't accidentally break schema syntax by
+//     editing the Elementor HTML widget.
 //
-// FAQ answers stay in the rendered DOM (CSS-collapsed via <details>) so
-// Google's FAQPage rich-result rules + AEO engines (Perplexity, Claude,
-// ChatGPT) treat them as discoverable.
+//  2. wp_head — output scoped CSS that styles the In Summary + FAQ blocks
+//     the operator pastes into Elementor HTML widgets. The HTML lives in
+//     Elementor (operator-editable, layout-aware); the CSS lives here
+//     (so it stays consistent across dev/live and survives Elementor
+//     edits).
+//
+// Visible HTML for In Summary + FAQ is NOT injected by this plugin. The
+// operator pastes it into Elementor HTML widgets on each project page so
+// surrounding section backgrounds, paddings, and layouts work correctly.
+//
+// Page matching is slug-based so the same plugin behaves correctly on
+// dev and live.
 
-add_filter( 'the_content', 'bullion_ops_inject_project_faq', 100 );
+add_action( 'wp_head', 'bullion_ops_inject_project_faq_jsonld', 100 );
 
-function bullion_ops_inject_project_faq( $content ) {
-	if ( ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
-		return $content;
+function bullion_ops_inject_project_faq_jsonld() {
+	if ( ! is_singular() ) {
+		return;
 	}
-
 	$post = get_post();
 	if ( ! $post ) {
-		return $content;
+		return;
 	}
-
 	$data = bullion_ops_get_project_faq_data();
 	if ( ! isset( $data[ $post->post_name ] ) ) {
-		return $content;
+		return;
 	}
-
-	$page = $data[ $post->post_name ];
-	return $content
-		. bullion_ops_render_project_faq_html( $page )
-		. bullion_ops_render_project_faq_jsonld( $page );
+	echo bullion_ops_render_project_faq_jsonld( $data[ $post->post_name ] ); // phpcs:ignore WordPress.Security.EscapeOutput
 }
 
 add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
@@ -499,24 +502,6 @@ function bullion_ops_inject_project_faq_css() {
 }
 </style>
 	<?php
-}
-
-function bullion_ops_render_project_faq_html( $page ) {
-	$out  = "\n<section class=\"bullion-ops-project-summary\">";
-	$out .= '<h2>In Summary</h2>';
-	$out .= '<p>' . esc_html( $page['in_summary'] ) . '</p>';
-	$out .= "</section>\n";
-
-	$out .= '<section class="bullion-ops-project-faq">';
-	$out .= '<h2>Frequently Asked Questions</h2>';
-	foreach ( $page['faqs'] as $faq ) {
-		$out .= '<details>';
-		$out .= '<summary>' . esc_html( $faq['q'] ) . '</summary>';
-		$out .= '<p>' . esc_html( $faq['a'] ) . '</p>';
-		$out .= '</details>';
-	}
-	$out .= "</section>\n";
-	return $out;
 }
 
 function bullion_ops_render_project_faq_jsonld( $page ) {
