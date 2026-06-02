@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.7.1
+ * Version: 0.7.2
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.7.1' );
+define( 'BULLION_OPS_VERSION', '0.7.2' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -464,6 +464,9 @@ function bullion_ops_inject_project_faq_css() {
   max-width:1100px;margin:32px auto;padding:0 20px;
   font-family:'Muli',sans-serif;color:#142934;
   position:relative;z-index:10;
+}
+.bullion-ops-project-summary + .bullion-ops-project-faq {
+  margin-top:64px;
 }
 .bullion-ops-project-summary h2,
 .bullion-ops-project-faq h2 {
