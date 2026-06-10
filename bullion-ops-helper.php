@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.7.3
+ * Version: 0.7.4
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.7.3' );
+define( 'BULLION_OPS_VERSION', '0.7.4' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -651,6 +651,74 @@ function bullion_ops_get_project_faq_data() {
 				[ 'q' => 'What is the JORC resource estimate for Mt Mackenzie?', 'a' => 'The Mt Mackenzie Mineral Resource Estimate stands at 3.35Mt at 1.40g/t gold and 8.4g/t silver, for 129,000 ounces of gold and 862,000 ounces of silver. Nearly half of the Resource is classified in the Indicated JORC category, and the deposit remains open in multiple directions.' ],
 				[ 'q' => 'What approvals and studies has Mt Mackenzie completed?', 'a' => 'Mt Mackenzie holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land. The project is currently undergoing further PFS-level work.' ],
 				[ 'q' => 'When did QMines acquire Mt Mackenzie?',               'a' => 'QMines acquired Mt Mackenzie from Resources and Energy Group in mid-2025.' ],
+			],
+		],
+	];
+}
+
+// --- Pillar page BreadcrumbList JSON-LD ------------------------------------
+//
+// Injects BreadcrumbList structured data on QMines pillar / cluster pages.
+// Rank Math does not emit a BreadcrumbList for root-level pages with no
+// parent category (parent=0 in WP), so this fills the gap.
+//
+// Each entry in bullion_ops_get_pillar_breadcrumbs() maps a page slug to its
+// breadcrumb trail. The array is keyed by WP post_name (slug). The trail is
+// an ordered array of [ 'name' => ..., 'url' => ... ] items. Position numbers
+// are assigned automatically (1-indexed) during JSON-LD emission.
+//
+// Shipping on wp_head at priority 100 (same as project FAQ schema) so all
+// schema blocks land together in the <head>.
+
+add_action( 'wp_head', 'bullion_ops_inject_pillar_breadcrumbs', 100 );
+
+function bullion_ops_inject_pillar_breadcrumbs() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post ) {
+		return;
+	}
+	$map = bullion_ops_get_pillar_breadcrumbs();
+	if ( ! isset( $map[ $post->post_name ] ) ) {
+		return;
+	}
+	$trail = $map[ $post->post_name ];
+	$items = [];
+	foreach ( $trail as $i => $crumb ) {
+		$items[] = [
+			'@type'    => 'ListItem',
+			'position' => $i + 1,
+			'name'     => $crumb['name'],
+			'item'     => $crumb['url'],
+		];
+	}
+	$schema = [
+		'@context'        => 'https://schema.org',
+		'@type'           => 'BreadcrumbList',
+		'itemListElement' => $items,
+	];
+	echo "\n<script type=\"application/ld+json\">"
+		. wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+		. "</script>\n";
+}
+
+function bullion_ops_get_pillar_breadcrumbs() {
+	$home = trailingslashit( home_url() );
+	return [
+		// Pillar: Is Copper a Good Investment?
+		// Root-level page (parent=0) — 2-step trail: Home → page.
+		// Added 2026-06-10 to fill the BreadcrumbList gap Rank Math leaves on
+		// parentless root-level pages.
+		'is-copper-a-good-investment' => [
+			[
+				'name' => 'Home',
+				'url'  => $home,
+			],
+			[
+				‘name’ => ‘Is Copper a Good Investment? An ASX Copper Developer’s View’,
+				‘url’  => $home . ‘is-copper-a-good-investment/’,
 			],
 		],
 	];
