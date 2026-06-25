@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.8.0
+ * Version: 0.8.1
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.8.0' );
+define( 'BULLION_OPS_VERSION', '0.8.1' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -792,8 +792,9 @@ function bullion_ops_purge_cache( WP_REST_Request $req ) {
 //   BULLION_OPS_NOTION_TOKEN                  Notion integration secret
 //   BULLION_OPS_PROCUREMENT_WEBHOOK_SECRET    Shared secret matching the header
 //
-// Required WP option:
-//   bullion_ops_procurement_db_id             Notion database ID
+// Notion database ID — set ONE of (constant takes precedence):
+//   define( 'BULLION_OPS_PROCUREMENT_DB_ID', '...' );     in wp-config.php, OR
+//   bullion_ops_procurement_db_id                          WP option
 //
 // Notion field mapping (Elementor field Custom ID -> Notion property):
 //   company_name        -> Company Name (title)
@@ -831,12 +832,15 @@ function bullion_ops_procurement_submit( WP_REST_Request $req ) {
 		error_log( 'bullion-ops procurement submit: BULLION_OPS_NOTION_TOKEN not defined' );
 		return new WP_Error( 'bullion_no_token', 'Notion token not configured', [ 'status' => 500 ] );
 	}
-	$db_id = apply_filters(
-		'bullion_ops_procurement_notion_db_id',
-		get_option( 'bullion_ops_procurement_db_id', '' )
-	);
+	// DB ID resolution: constant > option > filter. Constant in wp-config.php is
+	// the operator-friendly path (consistent with the other two webhook constants).
+	$db_id = defined( 'BULLION_OPS_PROCUREMENT_DB_ID' ) ? BULLION_OPS_PROCUREMENT_DB_ID : '';
 	if ( ! $db_id ) {
-		error_log( 'bullion-ops procurement submit: bullion_ops_procurement_db_id option not set' );
+		$db_id = get_option( 'bullion_ops_procurement_db_id', '' );
+	}
+	$db_id = apply_filters( 'bullion_ops_procurement_notion_db_id', $db_id );
+	if ( ! $db_id ) {
+		error_log( 'bullion-ops procurement submit: procurement DB ID not configured (set BULLION_OPS_PROCUREMENT_DB_ID constant in wp-config.php or bullion_ops_procurement_db_id option)' );
 		return new WP_Error( 'bullion_no_db', 'procurement DB ID not configured', [ 'status' => 500 ] );
 	}
 
