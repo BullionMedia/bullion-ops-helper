@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.7.6
+ * Version: 0.8.0
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.7.4' );
+define( 'BULLION_OPS_VERSION', '0.8.0' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -71,6 +71,12 @@ function bullion_ops_register_routes() {
 		'methods'             => 'POST',
 		'callback'            => 'bullion_ops_elementor_regenerate',
 		'permission_callback' => 'bullion_ops_permission',
+	] );
+
+	register_rest_route( BULLION_OPS_NS, '/procurement-submit', [
+		'methods'             => 'POST',
+		'callback'            => 'bullion_ops_procurement_submit',
+		'permission_callback' => 'bullion_ops_procurement_webhook_permission',
 	] );
 }
 
@@ -767,4 +773,210 @@ function bullion_ops_purge_cache_inner() {
 
 function bullion_ops_purge_cache( WP_REST_Request $req ) {
 	return rest_ensure_response( bullion_ops_purge_cache_inner() );
+}
+
+// --- Procurement webhook -> Notion DB --------------------------------------
+//
+// Receives form submissions from the Elementor Pro Webhook action on the
+// /suppliers/ page and creates rows in the QMines Procurement Signups
+// Notion database.
+//
+// POST /wp-json/bullion/v1/procurement-submit
+//
+// Auth: shared-secret header X-Bullion-Ops-Webhook-Secret matched against
+// the BULLION_OPS_PROCUREMENT_WEBHOOK_SECRET constant in wp-config.php.
+// Bypasses the standard manage_options check because Elementor sends the
+// webhook from the frontend with no WP user session.
+//
+// Required wp-config constants:
+//   BULLION_OPS_NOTION_TOKEN                  Notion integration secret
+//   BULLION_OPS_PROCUREMENT_WEBHOOK_SECRET    Shared secret matching the header
+//
+// Required WP option:
+//   bullion_ops_procurement_db_id             Notion database ID
+//
+// Notion field mapping (Elementor field Custom ID -> Notion property):
+//   company_name        -> Company Name (title)
+//   abn                 -> ABN (rich_text)
+//   contact_name        -> Contact Name (rich_text)
+//   contact_email       -> Contact Email (email)
+//   contact_phone       -> Contact Phone (phone_number)
+//   service_category    -> Service Category (multi_select, comma-split)
+//   location            -> Location (rich_text)
+//   capability_summary  -> Capability Summary (rich_text)
+//   website             -> Website (url, auto-prepends https:// if missing)
+//
+// Auto-stamped on every row:
+//   Submitted Date  -> today
+//   Status          -> "New"
+//   Submitted Via   -> "Procurement Form"
+
+function bullion_ops_procurement_webhook_permission( WP_REST_Request $req ) {
+	if ( ! defined( 'BULLION_OPS_PROCUREMENT_WEBHOOK_SECRET' ) ) {
+		error_log( 'bullion-ops procurement webhook: BULLION_OPS_PROCUREMENT_WEBHOOK_SECRET not defined' );
+		return new WP_Error( 'bullion_misconfigured', 'webhook secret not configured', [ 'status' => 500 ] );
+	}
+	$supplied = $req->get_header( 'x_bullion_ops_webhook_secret' );
+	if ( ! $supplied ) {
+		return new WP_Error( 'bullion_no_secret', 'missing X-Bullion-Ops-Webhook-Secret header', [ 'status' => 401 ] );
+	}
+	if ( ! hash_equals( BULLION_OPS_PROCUREMENT_WEBHOOK_SECRET, $supplied ) ) {
+		return new WP_Error( 'bullion_bad_secret', 'invalid webhook secret', [ 'status' => 401 ] );
+	}
+	return true;
+}
+
+function bullion_ops_procurement_submit( WP_REST_Request $req ) {
+	if ( ! defined( 'BULLION_OPS_NOTION_TOKEN' ) ) {
+		error_log( 'bullion-ops procurement submit: BULLION_OPS_NOTION_TOKEN not defined' );
+		return new WP_Error( 'bullion_no_token', 'Notion token not configured', [ 'status' => 500 ] );
+	}
+	$db_id = apply_filters(
+		'bullion_ops_procurement_notion_db_id',
+		get_option( 'bullion_ops_procurement_db_id', '' )
+	);
+	if ( ! $db_id ) {
+		error_log( 'bullion-ops procurement submit: bullion_ops_procurement_db_id option not set' );
+		return new WP_Error( 'bullion_no_db', 'procurement DB ID not configured', [ 'status' => 500 ] );
+	}
+
+	$fields = $req->get_params();
+	if ( empty( $fields ) || ! is_array( $fields ) ) {
+		return new WP_Error( 'bullion_no_fields', 'no form fields received', [ 'status' => 400 ] );
+	}
+
+	$properties = bullion_ops_map_elementor_to_notion( $fields );
+	if ( empty( $properties ) ) {
+		return new WP_Error( 'bullion_empty_map', 'no mapped fields produced', [ 'status' => 400 ] );
+	}
+
+	$result = bullion_ops_post_to_notion( $db_id, $properties );
+	if ( is_wp_error( $result ) ) {
+		return $result;
+	}
+
+	return rest_ensure_response( [
+		'ok'              => true,
+		'notion_page_id'  => $result['id'] ?? null,
+		'notion_page_url' => $result['url'] ?? null,
+	] );
+}
+
+function bullion_ops_map_elementor_to_notion( array $fields ) {
+	$props = [];
+
+	// Title (required for Notion page creation; fall back to "(no company name)" if missing).
+	$company_name = isset( $fields['company_name'] ) ? trim( (string) $fields['company_name'] ) : '';
+	if ( $company_name === '' ) {
+		$company_name = '(no company name)';
+	}
+	$props['Company Name'] = [
+		'title' => [ [ 'text' => [ 'content' => $company_name ] ] ],
+	];
+
+	// Rich text fields.
+	foreach ( [
+		'abn'                => 'ABN',
+		'contact_name'       => 'Contact Name',
+		'location'           => 'Location',
+		'capability_summary' => 'Capability Summary',
+	] as $key => $prop ) {
+		if ( ! empty( $fields[ $key ] ) ) {
+			$props[ $prop ] = [
+				'rich_text' => [ [ 'text' => [ 'content' => trim( (string) $fields[ $key ] ) ] ] ],
+			];
+		}
+	}
+
+	// Email.
+	if ( ! empty( $fields['contact_email'] ) ) {
+		$props['Contact Email'] = [
+			'email' => trim( (string) $fields['contact_email'] ),
+		];
+	}
+
+	// Phone.
+	if ( ! empty( $fields['contact_phone'] ) ) {
+		$props['Contact Phone'] = [
+			'phone_number' => trim( (string) $fields['contact_phone'] ),
+		];
+	}
+
+	// URL (auto-prepend https:// if user typed "example.com" without scheme).
+	if ( ! empty( $fields['website'] ) ) {
+		$url = trim( (string) $fields['website'] );
+		if ( ! preg_match( '#^https?://#i', $url ) ) {
+			$url = 'https://' . $url;
+		}
+		$props['Website'] = [ 'url' => $url ];
+	}
+
+	// Service Category — multi-select, splits on comma so single-select dropdown
+	// values and multi-checkbox values both work.
+	if ( ! empty( $fields['service_category'] ) ) {
+		$raw = (string) $fields['service_category'];
+		$options = array_filter( array_map( 'trim', explode( ',', $raw ) ) );
+		if ( ! empty( $options ) ) {
+			$multi = [];
+			foreach ( $options as $name ) {
+				$multi[] = [ 'name' => $name ];
+			}
+			$props['Service Category'] = [ 'multi_select' => $multi ];
+		}
+	}
+
+	// Auto-stamped fields.
+	$props['Submitted Date'] = [
+		'date' => [ 'start' => current_time( 'Y-m-d' ) ],
+	];
+	$props['Status'] = [
+		'select' => [ 'name' => 'New' ],
+	];
+	$props['Submitted Via'] = [
+		'select' => [ 'name' => 'Procurement Form' ],
+	];
+
+	return $props;
+}
+
+function bullion_ops_post_to_notion( $db_id, array $properties ) {
+	$body = [
+		'parent'     => [ 'database_id' => $db_id ],
+		'properties' => $properties,
+	];
+
+	$response = wp_remote_post( 'https://api.notion.com/v1/pages', [
+		'timeout' => 15,
+		'headers' => [
+			'Authorization'  => 'Bearer ' . BULLION_OPS_NOTION_TOKEN,
+			'Notion-Version' => '2022-06-28',
+			'Content-Type'   => 'application/json',
+		],
+		'body'    => wp_json_encode( $body ),
+	] );
+
+	if ( is_wp_error( $response ) ) {
+		error_log( 'bullion-ops procurement webhook: Notion API request failed - ' . $response->get_error_message() );
+		return new WP_Error(
+			'bullion_notion_timeout',
+			'Notion API request failed: ' . $response->get_error_message(),
+			[ 'status' => 504 ]
+		);
+	}
+
+	$code   = wp_remote_retrieve_response_code( $response );
+	$raw    = wp_remote_retrieve_body( $response );
+	$parsed = json_decode( $raw, true );
+
+	if ( $code < 200 || $code >= 300 ) {
+		$detail = is_array( $parsed ) && isset( $parsed['message'] ) ? $parsed['message'] : $raw;
+		error_log( 'bullion-ops procurement webhook: Notion API ' . $code . ' - ' . $detail );
+		return new WP_Error(
+			'bullion_notion_error',
+			'Notion API error (' . $code . '): ' . $detail,
+			[ 'status' => 502 ]
+		);
+	}
+
+	return is_array( $parsed ) ? $parsed : [];
 }
