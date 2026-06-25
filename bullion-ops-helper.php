@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.8.2
+ * Version: 0.8.3
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.8.2' );
+define( 'BULLION_OPS_VERSION', '0.8.3' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -817,9 +817,19 @@ function bullion_ops_procurement_webhook_permission( WP_REST_Request $req ) {
 		error_log( 'bullion-ops procurement webhook: BULLION_OPS_PROCUREMENT_WEBHOOK_SECRET not defined' );
 		return new WP_Error( 'bullion_misconfigured', 'webhook secret not configured', [ 'status' => 500 ] );
 	}
+	// Accept secret via either X-Bullion-Ops-Webhook-Secret header OR ?secret= query
+	// string. Header is preferred (doesn't appear in server access logs); query string
+	// is the fallback for form plugins like Elementor Pro's stock Webhook action that
+	// don't expose a custom-headers UI.
 	$supplied = $req->get_header( 'x_bullion_ops_webhook_secret' );
 	if ( ! $supplied ) {
-		return new WP_Error( 'bullion_no_secret', 'missing X-Bullion-Ops-Webhook-Secret header', [ 'status' => 401 ] );
+		$query = $req->get_query_params();
+		if ( is_array( $query ) && ! empty( $query['secret'] ) ) {
+			$supplied = (string) $query['secret'];
+		}
+	}
+	if ( ! $supplied ) {
+		return new WP_Error( 'bullion_no_secret', 'missing webhook secret (header X-Bullion-Ops-Webhook-Secret or query ?secret=)', [ 'status' => 401 ] );
 	}
 	if ( ! hash_equals( BULLION_OPS_PROCUREMENT_WEBHOOK_SECRET, $supplied ) ) {
 		return new WP_Error( 'bullion_bad_secret', 'invalid webhook secret', [ 'status' => 401 ] );
