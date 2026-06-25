@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.8.1
+ * Version: 0.8.2
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.8.1' );
+define( 'BULLION_OPS_VERSION', '0.8.2' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -849,6 +849,7 @@ function bullion_ops_procurement_submit( WP_REST_Request $req ) {
 		return new WP_Error( 'bullion_no_fields', 'no form fields received', [ 'status' => 400 ] );
 	}
 
+	$fields     = bullion_ops_normalize_field_keys( $fields );
 	$properties = bullion_ops_map_elementor_to_notion( $fields );
 	if ( empty( $properties ) ) {
 		return new WP_Error( 'bullion_empty_map', 'no mapped fields produced', [ 'status' => 400 ] );
@@ -864,6 +865,81 @@ function bullion_ops_procurement_submit( WP_REST_Request $req ) {
 		'notion_page_id'  => $result['id'] ?? null,
 		'notion_page_url' => $result['url'] ?? null,
 	] );
+}
+
+// Normalises whatever key style Elementor sends (Custom IDs, field labels, or
+// auto-generated IDs) into the canonical lowercase_underscore names the mapper
+// expects. Elementor defaults to field labels as keys if Custom IDs aren't set
+// on each field, so the canonical form is "Company Name" -> "company_name",
+// "City/Region" -> "city_region", etc. Aliases below collapse common label
+// variations onto the canonical Notion property keys.
+function bullion_ops_normalize_field_keys( array $fields ) {
+	$aliases = [
+		// company_name
+		'company_name'       => 'company_name',
+		'company'            => 'company_name',
+		'business_name'      => 'company_name',
+		// abn
+		'abn'                => 'abn',
+		// contact_name
+		'contact_name'       => 'contact_name',
+		'name'               => 'contact_name',
+		'your_name'          => 'contact_name',
+		'full_name'          => 'contact_name',
+		// contact_email
+		'contact_email'      => 'contact_email',
+		'email'              => 'contact_email',
+		'email_address'      => 'contact_email',
+		'your_email'         => 'contact_email',
+		// contact_phone
+		'contact_phone'      => 'contact_phone',
+		'phone'              => 'contact_phone',
+		'phone_number'       => 'contact_phone',
+		'your_phone'         => 'contact_phone',
+		// location
+		'location'           => 'location',
+		'city'               => 'location',
+		'region'             => 'location',
+		'town'               => 'location',
+		'city_region'        => 'location',
+		'cityregion'         => 'location',
+		'town_or_region'     => 'location',
+		'town_region'        => 'location',
+		// capability_summary
+		'capability_summary' => 'capability_summary',
+		'capability'         => 'capability_summary',
+		'summary'            => 'capability_summary',
+		'about'              => 'capability_summary',
+		'description'        => 'capability_summary',
+		'message'            => 'capability_summary',
+		// service_category
+		'service_category'   => 'service_category',
+		'service'            => 'service_category',
+		'services'           => 'service_category',
+		'category'           => 'service_category',
+		'categories'         => 'service_category',
+		// website
+		'website'            => 'website',
+		'web'                => 'website',
+		'url'                => 'website',
+		'site'               => 'website',
+	];
+	$normalized = [];
+	foreach ( $fields as $key => $value ) {
+		// Lowercase + collapse any non-alphanumeric run to a single underscore.
+		$clean = strtolower( (string) $key );
+		$clean = preg_replace( '#[^a-z0-9]+#', '_', $clean );
+		$clean = trim( (string) $clean, '_' );
+		if ( $clean === '' ) {
+			continue;
+		}
+		if ( isset( $aliases[ $clean ] ) ) {
+			$normalized[ $aliases[ $clean ] ] = $value;
+		}
+		// Unknown keys (Elementor meta like form_name, page_url, user_agent,
+		// remote_ip, powered_by, date, time, etc.) are dropped silently.
+	}
+	return $normalized;
 }
 
 function bullion_ops_map_elementor_to_notion( array $fields ) {
