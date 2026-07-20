@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
- * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.9.1
+ * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
+ * Version: 0.9.2
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.1' );
+define( 'BULLION_OPS_VERSION', '0.9.2' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -839,6 +839,125 @@ function bullion_ops_get_pillar_breadcrumbs() {
 				'url'  => $home . 'is-copper-a-good-investment/',
 			],
 		],
+	];
+}
+
+// --- Pillar hero image + floating title panel ------------------------------
+//
+// Turns the theme's plain .page-header into a full-viewport-width rounded
+// hero band carrying the post's featured image with a 45deg dark-navy
+// gradient (mirroring /insights/ hero panel treatment). Hides the theme's
+// duplicate title, then promotes the article's .asx-article-header block
+// into a dark navy title panel that hovers ~70% up into the hero. The
+// featured image URL is pulled dynamically per-post so any pillar / cluster
+// page that has a featured image set gets the treatment.
+//
+// Slug list is centralised in bullion_ops_get_pillar_hero_slugs() so cluster
+// posts can be enrolled without changing the injector below.
+
+add_action( 'wp_head', 'bullion_ops_inject_pillar_hero_css', 100 );
+
+function bullion_ops_inject_pillar_hero_css() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post ) {
+		return;
+	}
+	if ( ! in_array( $post->post_name, bullion_ops_get_pillar_hero_slugs(), true ) ) {
+		return;
+	}
+	if ( ! has_post_thumbnail( $post->ID ) ) {
+		return;
+	}
+	$img_url = get_the_post_thumbnail_url( $post->ID, 'full' );
+	if ( ! $img_url ) {
+		return;
+	}
+	$img = esc_url( $img_url );
+	?>
+<style id="bullion-ops-pillar-hero-css">
+/* HERO IMAGE BAND — full viewport width, rounded, 45deg dark-navy gradient */
+.page-header {
+	position: relative !important;
+	margin-inline: calc(50% - 50vw) !important;
+	width: 100vw !important;
+	max-width: 100vw !important;
+	padding: 0 2.4vw !important;
+	margin-top: 24px !important;
+	margin-bottom: 0 !important;
+	box-sizing: border-box !important;
+	background: transparent !important;
+	border: 0 !important;
+	min-height: 320px !important;
+	overflow: visible !important;
+}
+.page-header::before {
+	content: "" !important;
+	position: absolute !important;
+	top: 0 !important;
+	left: 2.4vw !important;
+	right: 2.4vw !important;
+	bottom: 0 !important;
+	background:
+		linear-gradient(45deg, rgba(20,41,52,.75) 0, rgba(20,41,52,.4) 40%, rgba(20,41,52,.05) 75%, rgba(20,41,52,0) 100%),
+		url("<?php echo $img; ?>") center right/cover no-repeat,
+		#142934 !important;
+	border-radius: 20px !important;
+	z-index: 0 !important;
+	pointer-events: none !important;
+}
+.page-header .entry-title { display: none !important; }
+
+/* TITLE PANEL — hovers ~70% up into the hero */
+.asx-article-header {
+	position: relative !important;
+	z-index: 5 !important;
+	display: block !important;
+	margin: -140px auto 40px auto !important;
+	max-width: 780px !important;
+	background: #142934 !important;
+	color: #fff !important;
+	padding: 40px 50px !important;
+	border-radius: 8px !important;
+	border: 1px solid #fff !important;
+	text-align: left !important;
+	box-shadow: 0 14px 34px rgba(0,0,0,.28) !important;
+}
+.asx-article-header h1 {
+	color: #fff !important;
+	font-size: clamp(1.5em, 2.6vw, 2em) !important;
+	font-weight: 500 !important;
+	line-height: 1.25 !important;
+	margin: 0 0 16px 0 !important;
+	text-align: left !important;
+}
+.asx-article-header .asx-article-meta {
+	color: rgba(255,255,255,.75) !important;
+	font-size: 0.9em !important;
+	margin: 0 !important;
+	display: block !important;
+	text-align: left !important;
+}
+.asx-article-header .asx-article-meta span {
+	color: rgba(255,255,255,.75) !important;
+	display: inline !important;
+}
+.asx-article-header .asx-article-meta span + span::before {
+	content: " \00b7 " !important;
+	margin: 0 8px !important;
+	color: rgba(255,255,255,.4) !important;
+}
+</style>
+	<?php
+}
+
+function bullion_ops_get_pillar_hero_slugs() {
+	return [
+		// Pillar
+		'is-copper-a-good-investment',
+		// Cluster posts get added here as they ship.
 	];
 }
 
