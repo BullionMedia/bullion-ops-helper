@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, and the [qmines_project_faq] shortcode for Elementor placement. Used by Bullion Media ops tooling.
- * Version: 0.8.3
+ * Version: 0.9.1
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.8.3' );
+define( 'BULLION_OPS_VERSION', '0.9.1' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -78,6 +78,115 @@ function bullion_ops_register_routes() {
 		'callback'            => 'bullion_ops_procurement_submit',
 		'permission_callback' => 'bullion_ops_procurement_webhook_permission',
 	] );
+
+	register_rest_route( BULLION_OPS_NS, '/wpcode/snippet', [
+		'methods'             => 'GET',
+		'callback'            => 'bullion_ops_wpcode_list',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
+
+	register_rest_route( BULLION_OPS_NS, '/wpcode/snippet/(?P<id>\d+)', [
+		'methods'             => 'GET',
+		'callback'            => 'bullion_ops_wpcode_get',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
+
+	register_rest_route( BULLION_OPS_NS, '/wpcode/snippet/(?P<id>\d+)/search-replace', [
+		'methods'             => 'PATCH',
+		'callback'            => 'bullion_ops_wpcode_search_replace',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
+}
+
+// --- WPCode snippet CRUD (v0.9.0) ------------------------------------------
+//
+// Read-and-search-replace access to WPCode Lite/Pro snippets (post_type=wpcode).
+// Needed because WPCode does not expose REST endpoints on its own. Scoped
+// tightly: only wpcode CPT, only search-replace (no arbitrary content set),
+// admin capability required.
+
+function bullion_ops_wpcode_list( WP_REST_Request $req ) {
+	$search = (string) $req->get_param( 'search' );
+	$args = [
+		'post_type'      => 'wpcode',
+		'post_status'    => 'any',
+		'posts_per_page' => 200,
+		'orderby'        => 'ID',
+		'order'          => 'ASC',
+	];
+	if ( '' !== $search ) {
+		$args['s'] = $search;
+	}
+	$posts = get_posts( $args );
+	$out = [];
+	foreach ( $posts as $p ) {
+		$out[] = [
+			'id'      => (int) $p->ID,
+			'title'   => $p->post_title,
+			'status'  => $p->post_status,
+			'excerpt' => substr( $p->post_content, 0, 240 ),
+			'length'  => strlen( $p->post_content ),
+		];
+	}
+	return [ 'count' => count( $out ), 'snippets' => $out ];
+}
+
+function bullion_ops_wpcode_get( WP_REST_Request $req ) {
+	$id = (int) $req['id'];
+	$post = get_post( $id );
+	if ( ! $post || 'wpcode' !== $post->post_type ) {
+		return new WP_Error( 'bullion_ops_not_found', 'wpcode snippet not found', [ 'status' => 404 ] );
+	}
+	return [
+		'id'      => (int) $post->ID,
+		'title'   => $post->post_title,
+		'status'  => $post->post_status,
+		'content' => $post->post_content,
+		'length'  => strlen( $post->post_content ),
+	];
+}
+
+function bullion_ops_wpcode_search_replace( WP_REST_Request $req ) {
+	$id      = (int) $req['id'];
+	$search  = (string) $req->get_param( 'search' );
+	$replace = (string) $req->get_param( 'replace' );
+
+	if ( '' === $search ) {
+		return new WP_Error( 'bullion_ops_bad_input', 'search cannot be empty', [ 'status' => 400 ] );
+	}
+
+	$post = get_post( $id );
+	if ( ! $post ) {
+		return new WP_Error( 'bullion_ops_not_found', 'snippet not found', [ 'status' => 404 ] );
+	}
+	if ( 'wpcode' !== $post->post_type ) {
+		return new WP_Error( 'bullion_ops_wrong_type', 'post is not a wpcode snippet (got: ' . $post->post_type . ')', [ 'status' => 400 ] );
+	}
+
+	$before = $post->post_content;
+	$count  = 0;
+	$after  = str_replace( $search, $replace, $before, $count );
+
+	if ( 0 === $count ) {
+		return new WP_Error( 'bullion_ops_no_match', 'search string not found in snippet content', [ 'status' => 404 ] );
+	}
+
+	$result = wp_update_post( [
+		'ID'           => $id,
+		'post_content' => $after,
+	], true );
+
+	if ( is_wp_error( $result ) ) {
+		return $result;
+	}
+
+	return [
+		'ok'            => true,
+		'snippet_id'    => $id,
+		'replacements'  => $count,
+		'before_length' => strlen( $before ),
+		'after_length'  => strlen( $after ),
+	];
 }
 
 function bullion_ops_permission() {
@@ -631,6 +740,7 @@ function bullion_ops_get_project_faq_data() {
 		'mt-chalmers' => [
 			'in_summary' => 'Mt Chalmers is QMines\' flagship development project, a high-grade copper-gold deposit 17km from Rockhampton with a completed Pre-Feasibility Study, five resource upgrades in under three years, and a current JORC resource of 11.86Mt at 1.22% copper equivalent. The project\'s shallow open-pit geometry, proximity to established infrastructure, and 316km² of tenure underpin QMines\' strategy of transitioning Mt Chalmers toward production. With 84% of resources in the Measured and Indicated JORC categories, Mt Chalmers represents the company\'s most advanced asset and its primary value-creation pathway.',
 			'faqs' => [
+				[ 'q' => 'What is the Mt Chalmers copper project?',             'a' => 'The Mt Chalmers copper-gold project is QMines\' flagship development asset in Central Queensland, located 17km north-east of Rockhampton. It is a past-producing high-grade copper and gold mine that operated between 1898 and 1982, now being redeveloped by QMines with a completed Pre-Feasibility Study, a declared Ore Reserve, and a Definitive Feasibility Study underway. The project holds a current JORC resource of 11.86Mt at 1.22% copper equivalent and forms the processing centre of QMines\' Multi-Project Copper & Gold Production Hub.' ],
 				[ 'q' => 'Where is the Mt Chalmers project located?',           'a' => 'Mt Chalmers is located 17km north-east of Rockhampton in Queensland, Australia. QMines holds 316km² of tenure at the project.' ],
 				[ 'q' => 'What commodities does Mt Chalmers produce?',          'a' => 'Mt Chalmers is a copper and gold project. The Pre-Feasibility Study defined a contained metal inventory of 65,000 tonnes of copper, 160,000 ounces of gold, 30,600 tonnes of zinc, 1.8 million ounces of silver, and 583,000 tonnes of pyrite.' ],
 				[ 'q' => 'What is the current JORC resource estimate for Mt Chalmers?', 'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.86Mt at 1.22% contained copper equivalent. 84% of these Resources fall in the Measured and Indicated JORC categories, reflecting five resource upgrades completed in under three years.' ],
@@ -640,8 +750,10 @@ function bullion_ops_get_project_faq_data() {
 			],
 		],
 		'develin-creek' => [
-			'in_summary' => 'Develin Creek is a high-grade copper and zinc project located approximately 90km west of Rockhampton, Queensland, acquired by QMines in September 2024. The project hosts a JORC resource of 4.13Mt at 1.37% copper equivalent for 56,581 tonnes of copper equivalent across several Volcanic Hosted Massive Sulphide deposits, with 70% of that resource in the Indicated category. Its proximity to the Mt Chalmers project positions Develin Creek as a potential contributor to QMines\' broader production hub strategy.',
+			'in_summary' => 'Develin Creek is a high-grade copper and zinc project located approximately 90km west of Rockhampton, Queensland, acquired by QMines in September 2024. The project hosts a JORC resource of 4.13Mt at 1.37% copper equivalent for 56,581 tonnes of copper equivalent across several Volcanic Hosted Massive Sulphide deposits, with 70% of that resource in the Indicated category. Its proximity to the Mt Chalmers project positions Develin Creek as a satellite feed source for QMines\' Multi-Project Copper & Gold Production Hub.',
 			'faqs' => [
+				[ 'q' => 'Who owns the Develin Creek copper project?',          'a' => 'QMines Limited (ASX:QML) owns 100% of the Develin Creek copper-zinc project. QMines completed the acquisition from Zenith Minerals Limited on 30 September 2024. The project is located approximately 90km west of Rockhampton in Queensland.' ],
+				[ 'q' => 'What is the Develin Creek copper project?',           'a' => 'Develin Creek is a 100%-owned QMines copper-zinc project located approximately 90km west of Rockhampton, Queensland. It hosts a JORC Mineral Resource of 4.13Mt at 1.37% copper equivalent across several Volcanic Hosted Massive Sulphide (VHMS) deposits, with 70% of the resource in the Indicated category. Its proximity to QMines\' flagship Mt Chalmers project positions Develin Creek as a satellite feed source for the Multi-Project Copper & Gold Production Hub.' ],
 				[ 'q' => 'Where is the Develin Creek project located?',         'a' => 'Develin Creek is located approximately 90km west of Rockhampton in Queensland, Australia. The project covers EPM 17604 and EPM 16749, totalling 272km² of tenure.' ],
 				[ 'q' => 'What commodities does Develin Creek contain?',        'a' => 'Develin Creek contains copper, zinc, gold and silver mineralisation hosted in several Volcanic Hosted Massive Sulphide (VHMS) deposits, including the Sulphide City, Scorpion and Window deposits.' ],
 				[ 'q' => 'What is the JORC resource estimate for Develin Creek?', 'a' => 'The Develin Creek Resource stands at 4.13Mt at 1.37% CuEq for 56,581 tonnes of copper equivalent. 70% of this Resource sits in the Indicated JORC category.' ],
