@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.3
+ * Version: 0.9.4
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.3' );
+define( 'BULLION_OPS_VERSION', '0.9.4' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -977,6 +977,316 @@ function bullion_ops_get_pillar_hero_slugs() {
 		'is-copper-a-good-investment',
 		// Cluster posts get added here as they ship.
 	];
+}
+
+// --- Auto Table of Contents (v0.9.4) --------------------------------------
+//
+// For enrolled slugs (pillar + cluster long-form articles), walks the H2
+// elements in post_content, adds anchor ids where missing, and injects a
+// collapsible <details> TOC block near the top of the article. Also emits
+// a SpeakableSpecification schema pointing at the TOC + first paragraph so
+// AI engines pick these as canonical speakable regions (AEO lift).
+//
+// Enrolment centralised in bullion_ops_get_toc_enrolled_slugs() below.
+// Skip conditions: not enrolled / <4 H2s / >20 H2s / manual TOC already
+// present (class="bullion-ops-toc").
+
+function bullion_ops_get_toc_enrolled_slugs() {
+	return [
+		'is-copper-a-good-investment',   // Pillar
+		'asx-copper-stocks',             // Cluster
+	];
+}
+
+function bullion_ops_slugify_heading( $text ) {
+	$text = wp_strip_all_tags( (string) $text );
+	$text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	if ( function_exists( 'iconv' ) ) {
+		$folded = @iconv( 'UTF-8', 'ASCII//TRANSLIT//IGNORE', $text );
+		if ( $folded !== false ) {
+			$text = $folded;
+		}
+	}
+	$text = strtolower( $text );
+	$text = preg_replace( '/[^a-z0-9]+/', '-', $text );
+	$text = trim( $text, '-' );
+	if ( '' === $text ) {
+		return 'section';
+	}
+	if ( preg_match( '/^\d/', $text ) ) {
+		$text = 'section-' . $text;
+	}
+	if ( strlen( $text ) > 60 ) {
+		$text = substr( $text, 0, 60 );
+		$text = rtrim( $text, '-' );
+	}
+	return $text;
+}
+
+function bullion_ops_toc_should_run() {
+	if ( is_admin() || ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
+		return false;
+	}
+	$post = get_post();
+	if ( ! $post ) {
+		return false;
+	}
+	return in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true );
+}
+
+function bullion_ops_toc_load_dom( $content ) {
+	if ( ! class_exists( 'DOMDocument' ) ) {
+		return null;
+	}
+	$wrapped = '<?xml encoding="UTF-8"?><div id="bullion-ops-toc-root">' . $content . '</div>';
+	$dom     = new DOMDocument();
+	libxml_use_internal_errors( true );
+	$loaded = $dom->loadHTML( $wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
+	libxml_clear_errors();
+	if ( ! $loaded ) {
+		return null;
+	}
+	return $dom;
+}
+
+function bullion_ops_toc_dom_to_html( $dom ) {
+	$root = $dom->getElementById( 'bullion-ops-toc-root' );
+	if ( ! $root ) {
+		return null;
+	}
+	$html = '';
+	foreach ( $root->childNodes as $child ) {
+		$html .= $dom->saveHTML( $child );
+	}
+	return $html;
+}
+
+function bullion_ops_add_h2_anchor_ids( $content ) {
+	if ( ! bullion_ops_toc_should_run() ) {
+		return $content;
+	}
+	if ( '' === trim( (string) $content ) ) {
+		return $content;
+	}
+	$dom = bullion_ops_toc_load_dom( $content );
+	if ( ! $dom ) {
+		return $content;
+	}
+	$h2s = $dom->getElementsByTagName( 'h2' );
+	if ( 0 === $h2s->length ) {
+		return $content;
+	}
+	$seen = [];
+	foreach ( iterator_to_array( $h2s ) as $h2 ) {
+		if ( $h2->hasAttribute( 'id' ) && '' !== trim( $h2->getAttribute( 'id' ) ) ) {
+			$seen[ $h2->getAttribute( 'id' ) ] = true;
+			continue;
+		}
+		$base = bullion_ops_slugify_heading( $h2->textContent );
+		$slug = $base;
+		$n    = 2;
+		while ( isset( $seen[ $slug ] ) ) {
+			$slug = $base . '-' . $n;
+			$n++;
+		}
+		$seen[ $slug ] = true;
+		$h2->setAttribute( 'id', $slug );
+	}
+	$out = bullion_ops_toc_dom_to_html( $dom );
+	return ( null === $out ) ? $content : $out;
+}
+add_filter( 'the_content', 'bullion_ops_add_h2_anchor_ids', 15 );
+
+function bullion_ops_inject_toc_block( $content ) {
+	if ( ! bullion_ops_toc_should_run() ) {
+		return $content;
+	}
+	if ( false !== strpos( $content, 'class="bullion-ops-toc"' ) ) {
+		return $content; // Manual TOC already present — do not double-render.
+	}
+	$dom = bullion_ops_toc_load_dom( $content );
+	if ( ! $dom ) {
+		return $content;
+	}
+	$h2s = $dom->getElementsByTagName( 'h2' );
+	$count = $h2s->length;
+	if ( $count < 4 || $count > 20 ) {
+		return $content;
+	}
+	$entries = [];
+	foreach ( iterator_to_array( $h2s ) as $h2 ) {
+		$id = $h2->getAttribute( 'id' );
+		if ( '' === $id ) {
+			continue; // add_h2_anchor_ids should have filled these — skip if not.
+		}
+		$text = trim( $h2->textContent );
+		if ( '' === $text ) {
+			continue;
+		}
+		$entries[] = [ 'id' => $id, 'text' => $text ];
+	}
+	if ( count( $entries ) < 4 ) {
+		return $content;
+	}
+
+	$li = '';
+	foreach ( $entries as $e ) {
+		$li .= '<li><a href="#' . esc_attr( $e['id'] ) . '">' . esc_html( $e['text'] ) . '</a></li>';
+	}
+	$toc = '<details class="bullion-ops-toc" open><summary>On this page</summary><ol>' . $li . '</ol></details>';
+
+	// Injection point: after the first <p> at the root, else prepend.
+	$root = $dom->getElementById( 'bullion-ops-toc-root' );
+	if ( ! $root ) {
+		return $content;
+	}
+	$first_p = null;
+	foreach ( $root->childNodes as $child ) {
+		if ( XML_ELEMENT_NODE === $child->nodeType && 'p' === strtolower( $child->nodeName ) ) {
+			$first_p = $child;
+			break;
+		}
+	}
+
+	$fragment = $dom->createDocumentFragment();
+	@$fragment->appendXML( '' ); // no-op, force valid state
+	$tmp = new DOMDocument();
+	libxml_use_internal_errors( true );
+	$tmp->loadHTML( '<?xml encoding="UTF-8"?><div id="bullion-ops-toc-wrap">' . $toc . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
+	libxml_clear_errors();
+	$wrap = $tmp->getElementById( 'bullion-ops-toc-wrap' );
+	if ( ! $wrap || ! $wrap->firstChild ) {
+		return $content;
+	}
+	$imported = $dom->importNode( $wrap->firstChild, true );
+
+	if ( $first_p && $first_p->nextSibling ) {
+		$root->insertBefore( $imported, $first_p->nextSibling );
+	} elseif ( $first_p ) {
+		$root->appendChild( $imported );
+	} else {
+		$root->insertBefore( $imported, $root->firstChild );
+	}
+
+	$out = bullion_ops_toc_dom_to_html( $dom );
+	return ( null === $out ) ? $content : $out;
+}
+add_filter( 'the_content', 'bullion_ops_inject_toc_block', 20 );
+
+add_action( 'wp_head', 'bullion_ops_inject_toc_css', 100 );
+
+function bullion_ops_inject_toc_css() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true ) ) {
+		return;
+	}
+	?>
+<style id="bullion-ops-toc-css">
+.bullion-ops-toc {
+	background: #f7faf9 !important;
+	border: 1px solid #e5eae8 !important;
+	border-radius: 12px !important;
+	padding: 18px 24px !important;
+	margin: 28px 0 32px 0 !important;
+	font-size: 0.98em !important;
+	line-height: 1.5 !important;
+}
+.bullion-ops-toc > summary {
+	cursor: pointer !important;
+	font-weight: 600 !important;
+	color: #142934 !important;
+	font-size: 1.02em !important;
+	list-style: none !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 10px !important;
+}
+.bullion-ops-toc > summary::-webkit-details-marker { display: none !important; }
+.bullion-ops-toc > summary::before {
+	content: "" !important;
+	display: inline-block !important;
+	width: 10px !important;
+	height: 10px !important;
+	border-right: 2px solid #2e6b52 !important;
+	border-bottom: 2px solid #2e6b52 !important;
+	transform: rotate(45deg) !important;
+	transition: transform 0.15s ease !important;
+	margin-right: 4px !important;
+}
+.bullion-ops-toc[open] > summary::before {
+	transform: rotate(-135deg) !important;
+	margin-top: 4px !important;
+}
+.bullion-ops-toc ol {
+	margin: 14px 0 0 0 !important;
+	padding: 0 0 0 22px !important;
+	counter-reset: bullion-toc !important;
+	list-style: none !important;
+}
+.bullion-ops-toc ol li {
+	counter-increment: bullion-toc !important;
+	margin: 6px 0 !important;
+	padding-left: 4px !important;
+	position: relative !important;
+}
+.bullion-ops-toc ol li::before {
+	content: counter(bullion-toc) "." !important;
+	position: absolute !important;
+	left: -22px !important;
+	color: #2e6b52 !important;
+	font-weight: 600 !important;
+	font-variant-numeric: tabular-nums !important;
+}
+.bullion-ops-toc ol li a {
+	color: #142934 !important;
+	text-decoration: none !important;
+	border-bottom: 1px solid transparent !important;
+	transition: border-color 0.15s ease, color 0.15s ease !important;
+}
+.bullion-ops-toc ol li a:hover,
+.bullion-ops-toc ol li a:focus {
+	color: #2e6b52 !important;
+	border-bottom-color: #2e6b52 !important;
+}
+@media (max-width: 640px) {
+	.bullion-ops-toc {
+		padding: 14px 18px !important;
+		margin: 20px 0 24px 0 !important;
+	}
+	.bullion-ops-toc[open] > summary {
+		margin-bottom: 4px !important;
+	}
+}
+</style>
+	<?php
+}
+
+add_action( 'wp_head', 'bullion_ops_inject_toc_speakable_jsonld', 105 );
+
+function bullion_ops_inject_toc_speakable_jsonld() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true ) ) {
+		return;
+	}
+	$schema = [
+		'@context'  => 'https://schema.org',
+		'@type'     => 'WebPage',
+		'speakable' => [
+			'@type'       => 'SpeakableSpecification',
+			'cssSelector' => [ '.bullion-ops-toc', '.entry-content > p:first-of-type' ],
+		],
+	];
+	echo "\n<script type=\"application/ld+json\">"
+		. wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+		. "</script>\n";
 }
 
 // --- Cache purge -----------------------------------------------------------
