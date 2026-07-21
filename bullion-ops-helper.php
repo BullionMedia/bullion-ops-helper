@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.7
+ * Version: 0.9.8
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.7' );
+define( 'BULLION_OPS_VERSION', '0.9.8' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -979,7 +979,7 @@ function bullion_ops_get_pillar_hero_slugs() {
 	];
 }
 
-// --- Auto Table of Contents (v0.9.7) --------------------------------------
+// --- Auto Table of Contents (v0.9.8) --------------------------------------
 //
 // For enrolled slugs (pillar + cluster long-form articles), walks the H2
 // elements in post_content, adds anchor ids where missing, and injects a
@@ -1146,6 +1146,14 @@ function bullion_ops_toc_render_html( $entries ) {
 	// The explicit "border:0" on the anchor is load-bearing: without it,
 	// the theme's default underline / bordered-link style paints a full
 	// four-sided border box around each TOC entry text.
+	//
+	// v0.9.8 semantics: outer <nav aria-label="Table of contents"> creates
+	// a labelled navigation landmark (accessibility + doc SEO). The inner
+	// <details role="doc-toc"> adds DPUB-ARIA role recognised by
+	// screen readers + Google as a Table of Contents section. Defensive
+	// inline reset on the <nav> prevents any theme rule targeting bare
+	// <nav a { ... }> from bleeding in and altering the visual.
+	$s_nav     = 'display:block;margin:0;padding:0;border:0;background:transparent;';
 	$s_toc     = 'background:#f5f6f7;border:1px solid #e8eded;border-radius:12px;padding:18px 24px 20px;margin:0 0 32px;font-size:0.98em;line-height:1.5;color:#142934;font-family:inherit;';
 	$s_summary = 'cursor:pointer;font-weight:600;color:#142934;font-size:1.02em;list-style:none;padding:0;margin:0;display:flex;align-items:center;gap:10px;';
 	$s_ol      = 'margin:14px 0 0;padding:0 0 0 26px;list-style:decimal;color:#142934;';
@@ -1159,10 +1167,48 @@ function bullion_ops_toc_render_html( $entries ) {
 			. esc_html( $e['text'] )
 			. '</a></li>';
 	}
-	return '<details class="bullion-ops-toc" open style="' . esc_attr( $s_toc ) . '">'
+	return '<nav aria-label="Table of contents" style="' . esc_attr( $s_nav ) . '">'
+		. '<details class="bullion-ops-toc" open role="doc-toc" style="' . esc_attr( $s_toc ) . '">'
 		. '<summary class="bullion-ops-toc__summary" style="' . esc_attr( $s_summary ) . '">On this page</summary>'
 		. '<ol class="bullion-ops-toc__list" style="' . esc_attr( $s_ol ) . '">' . $li . '</ol>'
-		. '</details>';
+		. '</details>'
+		. '</nav>';
+}
+
+// Deterministic H2 extractor — mirrors the id-assignment logic in
+// bullion_ops_add_h2_anchor_ids so the wp_head schema emitter can compute
+// the same {id, text} entries before the_content filter has fired.
+function bullion_ops_toc_extract_entries_from_content( $content ) {
+	if ( '' === trim( (string) $content ) ) {
+		return [];
+	}
+	$dom = bullion_ops_toc_load_dom( $content );
+	if ( ! $dom ) {
+		return [];
+	}
+	$h2s = $dom->getElementsByTagName( 'h2' );
+	if ( 0 === $h2s->length ) {
+		return [];
+	}
+	$entries = [];
+	$seen    = [];
+	foreach ( iterator_to_array( $h2s ) as $h2 ) {
+		$text = trim( $h2->textContent );
+		if ( '' === $text ) {
+			continue;
+		}
+		$existing = $h2->hasAttribute( 'id' ) ? trim( $h2->getAttribute( 'id' ) ) : '';
+		$base     = ( '' !== $existing ) ? $existing : bullion_ops_slugify_heading( $text );
+		$id       = $base;
+		$n        = 2;
+		while ( isset( $seen[ $id ] ) ) {
+			$id = $base . '-' . $n;
+			$n++;
+		}
+		$seen[ $id ] = true;
+		$entries[]   = [ 'id' => $id, 'text' => $text ];
+	}
+	return $entries;
 }
 
 function bullion_ops_inject_toc_block( $content ) {
@@ -1326,6 +1372,45 @@ function bullion_ops_inject_toc_css() {
 }
 </style>
 	<?php
+}
+
+add_action( 'wp_head', 'bullion_ops_inject_toc_itemlist_jsonld', 104 );
+
+function bullion_ops_inject_toc_itemlist_jsonld() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true ) ) {
+		return;
+	}
+	$entries = bullion_ops_toc_extract_entries_from_content( $post->post_content );
+	$count   = count( $entries );
+	if ( $count < 4 || $count > 20 ) {
+		return; // same gate as the visible TOC block
+	}
+	$permalink = get_permalink( $post );
+	if ( ! $permalink ) {
+		return;
+	}
+	$items = [];
+	foreach ( $entries as $idx => $e ) {
+		$items[] = [
+			'@type'    => 'ListItem',
+			'position' => $idx + 1,
+			'name'     => $e['text'],
+			'url'      => $permalink . '#' . $e['id'],
+		];
+	}
+	$schema = [
+		'@context'        => 'https://schema.org',
+		'@type'           => 'ItemList',
+		'name'            => 'Table of contents',
+		'itemListElement' => $items,
+	];
+	echo "\n<script type=\"application/ld+json\">"
+		. wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+		. "</script>\n";
 }
 
 add_action( 'wp_head', 'bullion_ops_inject_toc_speakable_jsonld', 105 );
