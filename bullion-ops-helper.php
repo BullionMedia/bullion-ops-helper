@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.5
+ * Version: 0.9.6
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.5' );
+define( 'BULLION_OPS_VERSION', '0.9.6' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -979,7 +979,7 @@ function bullion_ops_get_pillar_hero_slugs() {
 	];
 }
 
-// --- Auto Table of Contents (v0.9.5) --------------------------------------
+// --- Auto Table of Contents (v0.9.6) --------------------------------------
 //
 // For enrolled slugs (pillar + cluster long-form articles), walks the H2
 // elements in post_content, adds anchor ids where missing, and injects a
@@ -1098,24 +1098,22 @@ function bullion_ops_add_h2_anchor_ids( $content ) {
 add_filter( 'the_content', 'bullion_ops_add_h2_anchor_ids', 15 );
 
 function bullion_ops_toc_find_insertion_anchor( $dom, $root ) {
-	// Preferred anchor: root-level ancestor of any .asx-article-wrapper /
-	// .asx-article-header block. This ensures the TOC sits BELOW the
-	// floating dark-navy title panel on pillar / cluster pages (v0.9.2
-	// hero styling). Without this the TOC lands between the hero image
-	// and the title panel, which stacks visually wrong.
+	// Preferred anchor: .asx-article-header — insert as SIBLING after it,
+	// inside its own parent (which is typically .asx-article-wrapper).
+	// This lands the TOC directly under the dark navy title panel.
+	//
+	// Regression in v0.9.5: walked up to root-level ancestor and inserted
+	// after that. Because .asx-article-wrapper wraps the entire article
+	// body, "after wrapper" put the TOC at the end of the page. Fixed
+	// by treating .asx-article-header as a sibling anchor, not a root
+	// ancestor.
 	$xpath = new DOMXPath( $dom );
-	$q     = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-article-wrapper ") or contains(concat(" ", normalize-space(@class), " "), " asx-article-header ")]';
+	$q     = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-article-header ")]';
 	$hits  = $xpath->query( $q );
 	if ( $hits && $hits->length > 0 ) {
-		$node = $hits->item( 0 );
-		while ( $node->parentNode && $node->parentNode !== $root ) {
-			$node = $node->parentNode;
-		}
-		if ( $node->parentNode === $root ) {
-			return $node;
-		}
+		return $hits->item( 0 );
 	}
-	// Fallback: first <p> at the root of the content.
+	// Fallback: first <p> at the root of the content (insert as sibling).
 	foreach ( $root->childNodes as $child ) {
 		if ( XML_ELEMENT_NODE === $child->nodeType && 'p' === strtolower( $child->nodeName ) ) {
 			return $child;
@@ -1200,10 +1198,13 @@ function bullion_ops_inject_toc_block( $content ) {
 	$imported = $dom->importNode( $wrap->firstChild, true );
 
 	$anchor = bullion_ops_toc_find_insertion_anchor( $dom, $root );
-	if ( $anchor && $anchor->nextSibling ) {
-		$root->insertBefore( $imported, $anchor->nextSibling );
-	} elseif ( $anchor ) {
-		$root->appendChild( $imported );
+	if ( $anchor ) {
+		$parent = $anchor->parentNode;
+		if ( $anchor->nextSibling ) {
+			$parent->insertBefore( $imported, $anchor->nextSibling );
+		} else {
+			$parent->appendChild( $imported );
+		}
 	} else {
 		$root->insertBefore( $imported, $root->firstChild );
 	}
