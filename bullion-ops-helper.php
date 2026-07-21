@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.2
+ * Version: 0.9.3
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.2' );
+define( 'BULLION_OPS_VERSION', '0.9.3' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -837,6 +837,24 @@ function bullion_ops_get_pillar_breadcrumbs() {
 			[
 				'name' => 'Is Copper a Good Investment? An ASX Copper Developer\'s View',
 				'url'  => $home . 'is-copper-a-good-investment/',
+			],
+		],
+		// Cluster: ASX Copper Stocks (child of the pillar).
+		// Root-level page (parent=0) — 3-step trail: Home → pillar → cluster.
+		// Added 2026-07-21 ahead of publish so BreadcrumbList schema fires on
+		// first indexation.
+		'asx-copper-stocks' => [
+			[
+				'name' => 'Home',
+				'url'  => $home,
+			],
+			[
+				'name' => 'Is Copper a Good Investment?',
+				'url'  => $home . 'is-copper-a-good-investment/',
+			],
+			[
+				'name' => 'ASX Copper Stocks: A Complete 2026 Investor Guide',
+				'url'  => $home . 'asx-copper-stocks/',
 			],
 		],
 	];
