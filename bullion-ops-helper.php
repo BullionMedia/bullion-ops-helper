@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.4
+ * Version: 0.9.5
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.4' );
+define( 'BULLION_OPS_VERSION', '0.9.5' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -979,7 +979,7 @@ function bullion_ops_get_pillar_hero_slugs() {
 	];
 }
 
-// --- Auto Table of Contents (v0.9.4) --------------------------------------
+// --- Auto Table of Contents (v0.9.5) --------------------------------------
 //
 // For enrolled slugs (pillar + cluster long-form articles), walks the H2
 // elements in post_content, adds anchor ids where missing, and injects a
@@ -1097,6 +1097,59 @@ function bullion_ops_add_h2_anchor_ids( $content ) {
 }
 add_filter( 'the_content', 'bullion_ops_add_h2_anchor_ids', 15 );
 
+function bullion_ops_toc_find_insertion_anchor( $dom, $root ) {
+	// Preferred anchor: root-level ancestor of any .asx-article-wrapper /
+	// .asx-article-header block. This ensures the TOC sits BELOW the
+	// floating dark-navy title panel on pillar / cluster pages (v0.9.2
+	// hero styling). Without this the TOC lands between the hero image
+	// and the title panel, which stacks visually wrong.
+	$xpath = new DOMXPath( $dom );
+	$q     = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-article-wrapper ") or contains(concat(" ", normalize-space(@class), " "), " asx-article-header ")]';
+	$hits  = $xpath->query( $q );
+	if ( $hits && $hits->length > 0 ) {
+		$node = $hits->item( 0 );
+		while ( $node->parentNode && $node->parentNode !== $root ) {
+			$node = $node->parentNode;
+		}
+		if ( $node->parentNode === $root ) {
+			return $node;
+		}
+	}
+	// Fallback: first <p> at the root of the content.
+	foreach ( $root->childNodes as $child ) {
+		if ( XML_ELEMENT_NODE === $child->nodeType && 'p' === strtolower( $child->nodeName ) ) {
+			return $child;
+		}
+	}
+	return null;
+}
+
+function bullion_ops_toc_render_html( $entries ) {
+	// Inline styles are the belt-and-braces layer: WP Rocket / LiteSpeed
+	// UsedCSS strips inline <style> blocks that reference selectors not
+	// found in the pre-render scan, which was killing the v0.9.4 TOC
+	// appearance. Inline element styles survive every cache layer.
+	// The <style> block from bullion_ops_inject_toc_css() adds hover /
+	// focus / ::marker / @media rules that inline styles can't express.
+	$s_toc     = 'background:#f7faf9;border:1px solid #e5eae8;border-radius:12px;padding:18px 24px 20px;margin:0 0 32px;font-size:0.98em;line-height:1.5;color:#142934;font-family:inherit;';
+	$s_summary = 'cursor:pointer;font-weight:600;color:#142934;font-size:1.02em;list-style:none;padding:0;margin:0;display:flex;align-items:center;gap:10px;';
+	$s_ol      = 'margin:14px 0 0;padding:0 0 0 26px;list-style:decimal;color:#142934;';
+	$s_li      = 'margin:6px 0;padding-left:4px;';
+	$s_a       = 'color:#142934;text-decoration:none;border-bottom:1px solid transparent;transition:border-color .15s ease,color .15s ease;';
+
+	$li = '';
+	foreach ( $entries as $e ) {
+		$li .= '<li style="' . esc_attr( $s_li ) . '">'
+			. '<a href="#' . esc_attr( $e['id'] ) . '" style="' . esc_attr( $s_a ) . '">'
+			. esc_html( $e['text'] )
+			. '</a></li>';
+	}
+	return '<details class="bullion-ops-toc" open style="' . esc_attr( $s_toc ) . '">'
+		. '<summary class="bullion-ops-toc__summary" style="' . esc_attr( $s_summary ) . '">On this page</summary>'
+		. '<ol class="bullion-ops-toc__list" style="' . esc_attr( $s_ol ) . '">' . $li . '</ol>'
+		. '</details>';
+}
+
 function bullion_ops_inject_toc_block( $content ) {
 	if ( ! bullion_ops_toc_should_run() ) {
 		return $content;
@@ -1108,7 +1161,7 @@ function bullion_ops_inject_toc_block( $content ) {
 	if ( ! $dom ) {
 		return $content;
 	}
-	$h2s = $dom->getElementsByTagName( 'h2' );
+	$h2s   = $dom->getElementsByTagName( 'h2' );
 	$count = $h2s->length;
 	if ( $count < 4 || $count > 20 ) {
 		return $content;
@@ -1117,7 +1170,7 @@ function bullion_ops_inject_toc_block( $content ) {
 	foreach ( iterator_to_array( $h2s ) as $h2 ) {
 		$id = $h2->getAttribute( 'id' );
 		if ( '' === $id ) {
-			continue; // add_h2_anchor_ids should have filled these — skip if not.
+			continue;
 		}
 		$text = trim( $h2->textContent );
 		if ( '' === $text ) {
@@ -1129,27 +1182,13 @@ function bullion_ops_inject_toc_block( $content ) {
 		return $content;
 	}
 
-	$li = '';
-	foreach ( $entries as $e ) {
-		$li .= '<li><a href="#' . esc_attr( $e['id'] ) . '">' . esc_html( $e['text'] ) . '</a></li>';
-	}
-	$toc = '<details class="bullion-ops-toc" open><summary>On this page</summary><ol>' . $li . '</ol></details>';
+	$toc = bullion_ops_toc_render_html( $entries );
 
-	// Injection point: after the first <p> at the root, else prepend.
 	$root = $dom->getElementById( 'bullion-ops-toc-root' );
 	if ( ! $root ) {
 		return $content;
 	}
-	$first_p = null;
-	foreach ( $root->childNodes as $child ) {
-		if ( XML_ELEMENT_NODE === $child->nodeType && 'p' === strtolower( $child->nodeName ) ) {
-			$first_p = $child;
-			break;
-		}
-	}
 
-	$fragment = $dom->createDocumentFragment();
-	@$fragment->appendXML( '' ); // no-op, force valid state
 	$tmp = new DOMDocument();
 	libxml_use_internal_errors( true );
 	$tmp->loadHTML( '<?xml encoding="UTF-8"?><div id="bullion-ops-toc-wrap">' . $toc . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
@@ -1160,9 +1199,10 @@ function bullion_ops_inject_toc_block( $content ) {
 	}
 	$imported = $dom->importNode( $wrap->firstChild, true );
 
-	if ( $first_p && $first_p->nextSibling ) {
-		$root->insertBefore( $imported, $first_p->nextSibling );
-	} elseif ( $first_p ) {
+	$anchor = bullion_ops_toc_find_insertion_anchor( $dom, $root );
+	if ( $anchor && $anchor->nextSibling ) {
+		$root->insertBefore( $imported, $anchor->nextSibling );
+	} elseif ( $anchor ) {
 		$root->appendChild( $imported );
 	} else {
 		$root->insertBefore( $imported, $root->firstChild );
