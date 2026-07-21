@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.6
+ * Version: 0.9.7
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.6' );
+define( 'BULLION_OPS_VERSION', '0.9.7' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -979,7 +979,7 @@ function bullion_ops_get_pillar_hero_slugs() {
 	];
 }
 
-// --- Auto Table of Contents (v0.9.6) --------------------------------------
+// --- Auto Table of Contents (v0.9.7) --------------------------------------
 //
 // For enrolled slugs (pillar + cluster long-form articles), walks the H2
 // elements in post_content, adds anchor ids where missing, and injects a
@@ -1097,26 +1097,36 @@ function bullion_ops_add_h2_anchor_ids( $content ) {
 }
 add_filter( 'the_content', 'bullion_ops_add_h2_anchor_ids', 15 );
 
-function bullion_ops_toc_find_insertion_anchor( $dom, $root ) {
-	// Preferred anchor: .asx-article-header — insert as SIBLING after it,
-	// inside its own parent (which is typically .asx-article-wrapper).
-	// This lands the TOC directly under the dark navy title panel.
+function bullion_ops_toc_find_insertion_target( $dom, $root ) {
+	// Returns [ 'mode' => 'after' | 'prepend-in', 'node' => DOMElement ]
+	// or null (prepend at root).
 	//
-	// Regression in v0.9.5: walked up to root-level ancestor and inserted
-	// after that. Because .asx-article-wrapper wraps the entire article
-	// body, "after wrapper" put the TOC at the end of the page. Fixed
-	// by treating .asx-article-header as a sibling anchor, not a root
-	// ancestor.
+	// Priority ladder:
+	//   1. Sibling AFTER .asx-article-header (pillar has this — lands
+	//      the TOC directly under the dark navy title panel).
+	//   2. First child OF .asx-article-wrapper (cluster case — no
+	//      header block, but the wrapper still exists; putting TOC at
+	//      the top of the wrapper matches the pillar's visual position).
+	//   3. Sibling AFTER first <p> at the root (generic long-form
+	//      article without either pillar-specific class).
+	//   4. Prepend at root (last resort).
 	$xpath = new DOMXPath( $dom );
-	$q     = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-article-header ")]';
-	$hits  = $xpath->query( $q );
+
+	$q_header = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-article-header ")]';
+	$hits     = $xpath->query( $q_header );
 	if ( $hits && $hits->length > 0 ) {
-		return $hits->item( 0 );
+		return [ 'mode' => 'after', 'node' => $hits->item( 0 ) ];
 	}
-	// Fallback: first <p> at the root of the content (insert as sibling).
+
+	$q_wrap = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-article-wrapper ")]';
+	$hits   = $xpath->query( $q_wrap );
+	if ( $hits && $hits->length > 0 ) {
+		return [ 'mode' => 'prepend-in', 'node' => $hits->item( 0 ) ];
+	}
+
 	foreach ( $root->childNodes as $child ) {
 		if ( XML_ELEMENT_NODE === $child->nodeType && 'p' === strtolower( $child->nodeName ) ) {
-			return $child;
+			return [ 'mode' => 'after', 'node' => $child ];
 		}
 	}
 	return null;
@@ -1129,11 +1139,18 @@ function bullion_ops_toc_render_html( $entries ) {
 	// appearance. Inline element styles survive every cache layer.
 	// The <style> block from bullion_ops_inject_toc_css() adds hover /
 	// focus / ::marker / @media rules that inline styles can't express.
-	$s_toc     = 'background:#f7faf9;border:1px solid #e5eae8;border-radius:12px;padding:18px 24px 20px;margin:0 0 32px;font-size:0.98em;line-height:1.5;color:#142934;font-family:inherit;';
+	// Palette matches existing plugin tones: #142934 (dark navy text),
+	// #4CA565 (QMines green accent), #e8eded (border used across FAQ +
+	// ASX archive). Background is the harmonising neutral lightest grey.
+	//
+	// The explicit "border:0" on the anchor is load-bearing: without it,
+	// the theme's default underline / bordered-link style paints a full
+	// four-sided border box around each TOC entry text.
+	$s_toc     = 'background:#f5f6f7;border:1px solid #e8eded;border-radius:12px;padding:18px 24px 20px;margin:0 0 32px;font-size:0.98em;line-height:1.5;color:#142934;font-family:inherit;';
 	$s_summary = 'cursor:pointer;font-weight:600;color:#142934;font-size:1.02em;list-style:none;padding:0;margin:0;display:flex;align-items:center;gap:10px;';
 	$s_ol      = 'margin:14px 0 0;padding:0 0 0 26px;list-style:decimal;color:#142934;';
 	$s_li      = 'margin:6px 0;padding-left:4px;';
-	$s_a       = 'color:#142934;text-decoration:none;border-bottom:1px solid transparent;transition:border-color .15s ease,color .15s ease;';
+	$s_a       = 'color:#142934;text-decoration:none;border:0;background:transparent;padding:0;box-shadow:none;';
 
 	$li = '';
 	foreach ( $entries as $e ) {
@@ -1197,13 +1214,21 @@ function bullion_ops_inject_toc_block( $content ) {
 	}
 	$imported = $dom->importNode( $wrap->firstChild, true );
 
-	$anchor = bullion_ops_toc_find_insertion_anchor( $dom, $root );
-	if ( $anchor ) {
-		$parent = $anchor->parentNode;
-		if ( $anchor->nextSibling ) {
-			$parent->insertBefore( $imported, $anchor->nextSibling );
+	$target = bullion_ops_toc_find_insertion_target( $dom, $root );
+	if ( $target && 'after' === $target['mode'] ) {
+		$node   = $target['node'];
+		$parent = $node->parentNode;
+		if ( $node->nextSibling ) {
+			$parent->insertBefore( $imported, $node->nextSibling );
 		} else {
 			$parent->appendChild( $imported );
+		}
+	} elseif ( $target && 'prepend-in' === $target['mode'] ) {
+		$node = $target['node'];
+		if ( $node->firstChild ) {
+			$node->insertBefore( $imported, $node->firstChild );
+		} else {
+			$node->appendChild( $imported );
 		}
 	} else {
 		$root->insertBefore( $imported, $root->firstChild );
@@ -1227,11 +1252,11 @@ function bullion_ops_inject_toc_css() {
 	?>
 <style id="bullion-ops-toc-css">
 .bullion-ops-toc {
-	background: #f7faf9 !important;
-	border: 1px solid #e5eae8 !important;
+	background: #f5f6f7 !important;
+	border: 1px solid #e8eded !important;
 	border-radius: 12px !important;
-	padding: 18px 24px !important;
-	margin: 28px 0 32px 0 !important;
+	padding: 18px 24px 20px !important;
+	margin: 0 0 32px 0 !important;
 	font-size: 0.98em !important;
 	line-height: 1.5 !important;
 }
@@ -1253,8 +1278,8 @@ function bullion_ops_inject_toc_css() {
 	display: inline-block !important;
 	width: 10px !important;
 	height: 10px !important;
-	border-right: 2px solid #2e6b52 !important;
-	border-bottom: 2px solid #2e6b52 !important;
+	border-right: 2px solid #4CA565 !important;
+	border-bottom: 2px solid #4CA565 !important;
 	transform: rotate(45deg) !important;
 	transition: transform 0.15s ease !important;
 	margin-right: 4px !important;
@@ -1265,39 +1290,35 @@ function bullion_ops_inject_toc_css() {
 }
 .bullion-ops-toc ol {
 	margin: 14px 0 0 0 !important;
-	padding: 0 0 0 22px !important;
-	counter-reset: bullion-toc !important;
-	list-style: none !important;
+	padding: 0 0 0 26px !important;
+	list-style: decimal !important;
 }
 .bullion-ops-toc ol li {
-	counter-increment: bullion-toc !important;
 	margin: 6px 0 !important;
 	padding-left: 4px !important;
-	position: relative !important;
 }
-.bullion-ops-toc ol li::before {
-	content: counter(bullion-toc) "." !important;
-	position: absolute !important;
-	left: -22px !important;
-	color: #2e6b52 !important;
+.bullion-ops-toc ol li::marker {
+	color: #4CA565 !important;
 	font-weight: 600 !important;
-	font-variant-numeric: tabular-nums !important;
 }
 .bullion-ops-toc ol li a {
 	color: #142934 !important;
 	text-decoration: none !important;
-	border-bottom: 1px solid transparent !important;
-	transition: border-color 0.15s ease, color 0.15s ease !important;
+	border: 0 !important;
+	background: transparent !important;
+	padding: 0 !important;
+	box-shadow: none !important;
 }
 .bullion-ops-toc ol li a:hover,
 .bullion-ops-toc ol li a:focus {
-	color: #2e6b52 !important;
-	border-bottom-color: #2e6b52 !important;
+	color: #4CA565 !important;
+	text-decoration: underline !important;
+	text-underline-offset: 3px !important;
 }
 @media (max-width: 640px) {
 	.bullion-ops-toc {
-		padding: 14px 18px !important;
-		margin: 20px 0 24px 0 !important;
+		padding: 14px 18px 16px !important;
+		margin: 0 0 24px 0 !important;
 	}
 	.bullion-ops-toc[open] > summary {
 		margin-bottom: 4px !important;
