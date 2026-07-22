@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.18
+ * Version: 0.9.19
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.18' );
+define( 'BULLION_OPS_VERSION', '0.9.19' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.18)
+	// accidentally match the project slug array below. (v0.9.19)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.18)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.19)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -1428,7 +1428,11 @@ function bullion_ops_inject_toc_block( $content ) {
 	}
 	$h2s   = $dom->getElementsByTagName( 'h2' );
 	$count = $h2s->length;
-	if ( $count < 4 || $count > 20 ) {
+	// Lower bound 4 (TOC pointless below that). Upper bound 40 —
+	// substantive ASX announcements can legitimately have 25-30 H2s
+	// (DFS update, quarterly, etc.). Was 20 originally; bumped 2026-07-22
+	// after the DFS-delivery announcement (28 H2s) was rejected.
+	if ( $count < 4 || $count > 40 ) {
 		return $content;
 	}
 	$entries = [];
@@ -1641,7 +1645,7 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		. "</script>\n";
 }
 
-// --- Insights grid shortcode (v0.9.18) -------------------------------------
+// --- Insights grid shortcode (v0.9.19) -------------------------------------
 //
 // [insights_grid] renders a card grid of every pillar / cluster page enrolled
 // in bullion_ops_get_pillar_hero_slugs() using the hand-coded
