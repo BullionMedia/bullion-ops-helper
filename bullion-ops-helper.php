@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.13
+ * Version: 0.9.14
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.13' );
+define( 'BULLION_OPS_VERSION', '0.9.14' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.13)
+	// accidentally match the project slug array below. (v0.9.14)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.13)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.14)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -1638,6 +1638,135 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 	echo "\n<script type=\"application/ld+json\">"
 		. wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
 		. "</script>\n";
+}
+
+// --- Insights grid shortcode (v0.9.14) -------------------------------------
+//
+// [insights_grid] renders a responsive tile grid of every pillar / cluster
+// page enrolled in bullion_ops_get_pillar_hero_slugs(). Drop the shortcode
+// once into an Elementor Text Editor or Shortcode widget on /insights/ and
+// every future pillar / cluster added to the enrolment list appears
+// automatically. No manual tile add ever again.
+//
+// Shortcode attributes (optional):
+//   orderby="pillar-first|title|date|menu_order"  (default: pillar-first)
+//   order="asc|desc"                              (default: asc)
+//   columns="auto|2|3|4"                          (default: auto)
+//
+// Tile content per enrolled page: featured image (WebP srcset preserved),
+// title, excerpt (25 words), green Read guide CTA.
+
+add_shortcode( 'insights_grid', 'bullion_ops_render_insights_grid' );
+
+function bullion_ops_render_insights_grid( $atts ) {
+	$atts = shortcode_atts(
+		[
+			'orderby' => 'pillar-first',
+			'order'   => 'asc',
+			'columns' => 'auto',
+		],
+		$atts,
+		'insights_grid'
+	);
+
+	$slugs = bullion_ops_get_pillar_hero_slugs();
+	if ( empty( $slugs ) ) {
+		return '';
+	}
+
+	$query_args = [
+		'post_type'      => 'page',
+		'post_status'    => 'publish',
+		'post_name__in'  => array_values( $slugs ),
+		'posts_per_page' => -1,
+		'no_found_rows'  => true,
+	];
+
+	if ( 'pillar-first' === $atts['orderby'] ) {
+		$query_args['orderby'] = 'parent';
+		$query_args['order']   = 'ASC';
+	} elseif ( in_array( $atts['orderby'], [ 'title', 'date', 'menu_order' ], true ) ) {
+		$query_args['orderby'] = $atts['orderby'];
+		$query_args['order']   = strtoupper( $atts['order'] );
+	}
+
+	$q = new WP_Query( $query_args );
+	if ( ! $q->have_posts() ) {
+		return '';
+	}
+
+	$grid_style = 'display:grid;gap:24px;margin:32px 0;';
+	if ( 'auto' === $atts['columns'] ) {
+		$grid_style .= 'grid-template-columns:repeat(auto-fill,minmax(320px,1fr));';
+	} else {
+		$grid_style .= 'grid-template-columns:repeat(' . (int) $atts['columns'] . ',1fr);';
+	}
+
+	$tile_style  = 'display:flex;flex-direction:column;background:#fff;border:1px solid #e8eded;border-radius:12px;overflow:hidden;text-decoration:none;color:#142934;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;';
+	$thumb_wrap  = 'display:block;width:100%;aspect-ratio:16/10;overflow:hidden;background:#f5f6f7;';
+	$thumb_img   = 'width:100%;height:100%;object-fit:cover;display:block;';
+	$title_style = 'font-family:inherit;font-size:18px;font-weight:600;line-height:1.35;color:#142934;margin:20px 20px 8px;';
+	$excerpt_st  = 'font-family:inherit;font-size:14px;color:#5a6b73;line-height:1.55;margin:0 20px 16px;flex:1;';
+	$cta_style   = 'display:block;margin:0 20px 20px;font-size:14px;font-weight:600;color:#4CA565;';
+
+	$out = '<div class="bullion-insights-grid" style="' . esc_attr( $grid_style ) . '">';
+	while ( $q->have_posts() ) {
+		$q->the_post();
+		$id    = get_the_ID();
+		$link  = get_permalink( $id );
+		$title = get_the_title( $id );
+		$xrpt  = wp_trim_words( strip_shortcodes( wp_strip_all_tags( get_the_excerpt( $id ) ) ), 25, '&hellip;' );
+
+		$thumb = '';
+		if ( has_post_thumbnail( $id ) ) {
+			$thumb_html = get_the_post_thumbnail( $id, 'medium_large', [ 'style' => esc_attr( $thumb_img ), 'loading' => 'lazy' ] );
+			$thumb      = '<span class="bullion-insights-thumb" style="' . esc_attr( $thumb_wrap ) . '">' . $thumb_html . '</span>';
+		}
+
+		$out .= '<a class="bullion-insights-tile" href="' . esc_url( $link ) . '" style="' . esc_attr( $tile_style ) . '">'
+			. $thumb
+			. '<h3 class="bullion-insights-title" style="' . esc_attr( $title_style ) . '">' . esc_html( $title ) . '</h3>'
+			. '<p class="bullion-insights-excerpt" style="' . esc_attr( $excerpt_st ) . '">' . esc_html( $xrpt ) . '</p>'
+			. '<span class="bullion-insights-cta" style="' . esc_attr( $cta_style ) . '">Read guide &rarr;</span>'
+			. '</a>';
+	}
+	wp_reset_postdata();
+	$out .= '</div>';
+	return $out;
+}
+
+// Hover-state CSS (inline styles can't express :hover — this <style> block
+// adds the lift + green border on hover, on top of the inline base styles
+// that guarantee the grid renders even when Rocket UsedCSS strips <style>).
+add_action( 'wp_head', 'bullion_ops_insights_grid_hover_css', 100 );
+
+function bullion_ops_insights_grid_hover_css() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post || false === strpos( $post->post_content, '[insights_grid' ) ) {
+		return;
+	}
+	?>
+<style id="bullion-ops-insights-grid-hover-css">
+.bullion-insights-tile:hover,
+.bullion-insights-tile:focus {
+	transform: translateY(-3px) !important;
+	box-shadow: 0 12px 28px rgba(20,41,52,.10) !important;
+	border-color: #4CA565 !important;
+}
+.bullion-insights-tile:hover .bullion-insights-cta,
+.bullion-insights-tile:focus .bullion-insights-cta {
+	color: #142934 !important;
+}
+@media (max-width: 640px) {
+	.bullion-insights-grid {
+		gap: 16px !important;
+	}
+}
+</style>
+	<?php
 }
 
 // --- Cache purge -----------------------------------------------------------
