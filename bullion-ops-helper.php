@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.12
+ * Version: 0.9.13
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.12' );
+define( 'BULLION_OPS_VERSION', '0.9.13' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.12)
+	// accidentally match the project slug array below. (v0.9.13)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.12)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.13)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -846,10 +846,11 @@ function bullion_ops_get_pillar_breadcrumbs() {
 				'url'  => $home . 'is-copper-a-good-investment/',
 			],
 		],
-		// Cluster: ASX Copper Stocks (child of the pillar).
-		// Root-level page (parent=0) — 3-step trail: Home → pillar → cluster.
-		// Added 2026-07-21 ahead of publish so BreadcrumbList schema fires on
-		// first indexation.
+		// Cluster: ASX Copper Stocks (nested under the pillar via WP parent=18618).
+		// 3-step trail: Home → pillar → cluster. Updated 2026-07-22 when the
+		// cluster was moved from root-level to nested under the pillar
+		// (URL: /is-copper-a-good-investment/asx-copper-stocks/) so the
+		// permalink structure reinforces the topical hierarchy.
 		'asx-copper-stocks' => [
 			[
 				'name' => 'Home',
@@ -861,7 +862,7 @@ function bullion_ops_get_pillar_breadcrumbs() {
 			],
 			[
 				'name' => 'ASX Copper Stocks: A Complete 2026 Investor Guide',
-				'url'  => $home . 'asx-copper-stocks/',
+				'url'  => $home . 'is-copper-a-good-investment/asx-copper-stocks/',
 			],
 		],
 	];
