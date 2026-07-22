@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.16
+ * Version: 0.9.17
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.16' );
+define( 'BULLION_OPS_VERSION', '0.9.17' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.16)
+	// accidentally match the project slug array below. (v0.9.17)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.16)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.17)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -1640,7 +1640,7 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		. "</script>\n";
 }
 
-// --- Insights grid shortcode (v0.9.16) -------------------------------------
+// --- Insights grid shortcode (v0.9.17) -------------------------------------
 //
 // [insights_grid] renders a card grid of every pillar / cluster page enrolled
 // in bullion_ops_get_pillar_hero_slugs() using the hand-coded
@@ -1725,7 +1725,15 @@ function bullion_ops_render_insights_grid( $atts ) {
 		$post_obj = get_post( $id );
 		$link     = get_permalink( $id );
 		$title    = get_the_title( $id );
-		$excerpt  = wp_trim_words( strip_shortcodes( wp_strip_all_tags( get_the_excerpt( $id ) ) ), 20, '&hellip;' );
+		// Prefer the page's custom Excerpt field (post_excerpt) if the
+		// operator has set one — that's the bespoke preview text control.
+		// Fall back to auto-generated 20-word summary otherwise.
+		$raw_excerpt = trim( (string) $post_obj->post_excerpt );
+		if ( '' !== $raw_excerpt ) {
+			$excerpt = strip_shortcodes( wp_strip_all_tags( $raw_excerpt ) );
+		} else {
+			$excerpt = wp_trim_words( strip_shortcodes( wp_strip_all_tags( get_the_excerpt( $id ) ) ), 20, '&hellip;' );
+		}
 		// Reader-facing content-type labels — "Pillar" / "Cluster" are SEO
 		// jargon and mean nothing to a public reader. "Deep Dive" signals
 		// long-form definitive coverage; "Guide" signals a focused, more
@@ -1745,6 +1753,13 @@ function bullion_ops_render_insights_grid( $atts ) {
 			? '<div class="qm-insights-card-visual-text">' . esc_html( $visual ) . '</div>'
 			: '';
 
+		// Footer row: meta line on left, "Read more" CTA on right. Inline
+		// styles guarantee the layout survives WP Rocket UsedCSS strip; the
+		// existing /insights/ page CSS provides the base look, the inline
+		// styles here add the flex + CTA that isn't in that CSS yet.
+		$footer_style   = 'display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:auto;';
+		$cta_link_style = 'flex-shrink:0;font-size:13px;font-weight:600;color:#30a759;text-decoration:none;white-space:nowrap;';
+
 		$cards .= '<article class="qm-insights-card">'
 			. '<div class="qm-insights-card-visual">'
 			. $thumb_html
@@ -1754,7 +1769,10 @@ function bullion_ops_render_insights_grid( $atts ) {
 			. '<span class="qm-insights-card-tag">' . esc_html( $tag ) . '</span>'
 			. '<h3><a href="' . esc_url( $link ) . '">' . esc_html( $title ) . '</a></h3>'
 			. '<p class="qm-insights-card-excerpt">' . esc_html( $excerpt ) . '</p>'
-			. '<p class="qm-insights-card-meta"><span>' . $mins . ' min read</span><span>' . esc_html( $pub ) . '</span></p>'
+			. '<div class="qm-insights-card-footer" style="' . esc_attr( $footer_style ) . '">'
+			. '<p class="qm-insights-card-meta" style="margin:0;"><span>' . $mins . ' min read</span><span>' . esc_html( $pub ) . '</span></p>'
+			. '<a class="qm-insights-card-cta" href="' . esc_url( $link ) . '" style="' . esc_attr( $cta_link_style ) . '">Read me &rarr;</a>'
+			. '</div>'
 			. '</div>'
 			. '</article>';
 	}
