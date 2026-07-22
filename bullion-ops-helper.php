@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.21
+ * Version: 0.9.22
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.21' );
+define( 'BULLION_OPS_VERSION', '0.9.22' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.21)
+	// accidentally match the project slug array below. (v0.9.22)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.21)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.22)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -1235,6 +1235,14 @@ function bullion_ops_toc_should_run() {
 	if ( ! $post ) {
 		return false;
 	}
+	// Auto-enrol every ASX announcement CPT singular. Downstream guards
+	// (4-H2 minimum, 40-H2 maximum in inject_toc_block) still apply, so
+	// short announcements skip the TOC automatically. Added 2026-07-22
+	// after per-slug enrolment proved too tedious across the announcement
+	// backlog.
+	if ( 'asx_announcement' === $post->post_type ) {
+		return true;
+	}
 	return in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true );
 }
 
@@ -1664,7 +1672,7 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		. "</script>\n";
 }
 
-// --- Insights grid shortcode (v0.9.21) -------------------------------------
+// --- Insights grid shortcode (v0.9.22) -------------------------------------
 //
 // [insights_grid] renders a card grid of every pillar / cluster page enrolled
 // in bullion_ops_get_pillar_hero_slugs() using the hand-coded
@@ -1819,7 +1827,7 @@ function bullion_ops_get_insights_visual_text( $slug ) {
 	return isset( $map[ $slug ] ) ? $map[ $slug ] : '';
 }
 
-// --- ASX announcement page-enhancement scripts (v0.9.21) -------------------
+// --- ASX announcement page-enhancement scripts (v0.9.22) -------------------
 //
 // Emits the JS enhancement bundle (blockquote wrapping around management
 // quotes + thead-th unit line-break formatting) via `wp_footer` on every
