@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.8
+ * Version: 0.9.9
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.8' );
+define( 'BULLION_OPS_VERSION', '0.9.9' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -979,7 +979,96 @@ function bullion_ops_get_pillar_hero_slugs() {
 	];
 }
 
-// --- Auto Table of Contents (v0.9.8) --------------------------------------
+// --- Title-panel meta auto-refresh (v0.9.9) --------------------------------
+//
+// Every render, walk the .asx-article-meta block on enrolled pillar / cluster
+// slugs and rewrite:
+//   * "N min read"           -> word count / 250 wpm (rounded, min 1)
+//   * "Updated DD Mmm YYYY"  -> WP post_modified formatted "j M Y"
+// Also refreshes any manual `"dateModified":"..."` inside inline JSON-LD
+// scripts so schema stays in sync with the visible date.
+//
+// Priority 5 so this runs BEFORE the H2-anchor / TOC filters (15, 20).
+// Enrolment reuses bullion_ops_get_toc_enrolled_slugs() — same set of pages
+// that carry the .asx-article-meta title-panel pattern.
+//
+// Trade-off (recorded in v0.9.9 release notes): any WP edit bumps
+// post_modified, so meta-only tweaks will refresh the visible Updated
+// date. Matches Google's post-modified convention.
+
+add_filter( 'the_content', 'bullion_ops_refresh_title_panel_meta', 5 );
+
+function bullion_ops_refresh_title_panel_meta( $content ) {
+	if ( ! bullion_ops_toc_should_run() ) {
+		return $content;
+	}
+	if ( false === strpos( $content, 'asx-article-meta' ) ) {
+		return $content;
+	}
+	$post = get_post();
+	if ( ! $post || empty( $post->post_modified ) ) {
+		return $content;
+	}
+
+	$modified_ts = strtotime( $post->post_modified );
+	if ( ! $modified_ts ) {
+		return $content;
+	}
+	$updated_str  = date_i18n( 'j M Y', $modified_ts );
+	$iso_modified = date( 'c', $modified_ts );
+
+	$plain = wp_strip_all_tags( $content, true );
+	$words = preg_match_all( '/[A-Za-z0-9\'\-]+/u', $plain, $m );
+	$mins  = max( 1, (int) round( ( $words > 0 ? $words : 1 ) / 250 ) );
+
+	// Refresh any manual `"dateModified":"..."` in inline JSON-LD blocks.
+	$content = preg_replace(
+		'/"dateModified":"[^"]*"/',
+		'"dateModified":"' . $iso_modified . '"',
+		$content
+	);
+
+	// Rewrite .asx-article-meta spans via DOMDocument.
+	$dom = bullion_ops_toc_load_dom( $content );
+	if ( ! $dom ) {
+		return $content;
+	}
+	$xpath = new DOMXPath( $dom );
+	$q     = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-article-meta ")]';
+	$hits  = $xpath->query( $q );
+	if ( ! $hits || 0 === $hits->length ) {
+		return $content;
+	}
+	$meta_el = $hits->item( 0 );
+
+	$touched = false;
+	foreach ( $meta_el->childNodes as $child ) {
+		if ( XML_ELEMENT_NODE !== $child->nodeType ) {
+			continue;
+		}
+		$text = trim( $child->textContent );
+		if ( preg_match( '/^\d+\s+min read$/i', $text ) ) {
+			while ( $child->firstChild ) {
+				$child->removeChild( $child->firstChild );
+			}
+			$child->appendChild( $dom->createTextNode( $mins . ' min read' ) );
+			$touched = true;
+		} elseif ( preg_match( '/^Updated\s+\d/i', $text ) ) {
+			while ( $child->firstChild ) {
+				$child->removeChild( $child->firstChild );
+			}
+			$child->appendChild( $dom->createTextNode( 'Updated ' . $updated_str ) );
+			$touched = true;
+		}
+	}
+	if ( ! $touched ) {
+		return $content;
+	}
+	$out = bullion_ops_toc_dom_to_html( $dom );
+	return ( null === $out ) ? $content : $out;
+}
+
+// --- Auto Table of Contents (v0.9.4) --------------------------------------
 //
 // For enrolled slugs (pillar + cluster long-form articles), walks the H2
 // elements in post_content, adds anchor ids where missing, and injects a
@@ -1147,17 +1236,17 @@ function bullion_ops_toc_render_html( $entries ) {
 	// the theme's default underline / bordered-link style paints a full
 	// four-sided border box around each TOC entry text.
 	//
-	// v0.9.8 semantics: outer <nav aria-label="Table of contents"> creates
+	// v0.9.9 semantics: outer <nav aria-label="Table of contents"> creates
 	// a labelled navigation landmark (accessibility + doc SEO). The inner
 	// <details role="doc-toc"> adds DPUB-ARIA role recognised by
 	// screen readers + Google as a Table of Contents section. Defensive
 	// inline reset on the <nav> prevents any theme rule targeting bare
 	// <nav a { ... }> from bleeding in and altering the visual.
 	$s_nav     = 'display:block;margin:0;padding:0;border:0;background:transparent;';
-	$s_toc     = 'background:#f5f6f7;border:1px solid #e8eded;border-radius:12px;padding:18px 24px 20px;margin:0 0 32px;font-size:0.98em;line-height:1.5;color:#142934;font-family:inherit;';
+	$s_toc     = 'background:#f5f6f7;border:1px solid #e8eded;border-radius:12px;padding:16px 24px 18px;margin:0 0 32px;font-size:0.98em;line-height:1.15;color:#142934;font-family:inherit;';
 	$s_summary = 'cursor:pointer;font-weight:600;color:#142934;font-size:1.02em;list-style:none;padding:0;margin:0;display:flex;align-items:center;gap:10px;';
-	$s_ol      = 'margin:14px 0 0;padding:0 0 0 26px;list-style:decimal;color:#142934;';
-	$s_li      = 'margin:6px 0;padding-left:4px;';
+	$s_ol      = 'margin:10px 0 0;padding:0 0 0 26px;list-style:decimal;color:#142934;';
+	$s_li      = 'margin:3px 0;padding-left:4px;font-weight:400;';
 	$s_a       = 'color:#142934;text-decoration:none;border:0;background:transparent;padding:0;box-shadow:none;';
 
 	$li = '';
@@ -1301,10 +1390,10 @@ function bullion_ops_inject_toc_css() {
 	background: #f5f6f7 !important;
 	border: 1px solid #e8eded !important;
 	border-radius: 12px !important;
-	padding: 18px 24px 20px !important;
+	padding: 16px 24px 18px !important;
 	margin: 0 0 32px 0 !important;
 	font-size: 0.98em !important;
-	line-height: 1.5 !important;
+	line-height: 1.15 !important;
 }
 .bullion-ops-toc > summary {
 	cursor: pointer !important;
@@ -1335,17 +1424,18 @@ function bullion_ops_inject_toc_css() {
 	margin-top: 4px !important;
 }
 .bullion-ops-toc ol {
-	margin: 14px 0 0 0 !important;
+	margin: 10px 0 0 0 !important;
 	padding: 0 0 0 26px !important;
 	list-style: decimal !important;
 }
 .bullion-ops-toc ol li {
-	margin: 6px 0 !important;
+	margin: 3px 0 !important;
 	padding-left: 4px !important;
+	font-weight: 400 !important;
 }
 .bullion-ops-toc ol li::marker {
 	color: #4CA565 !important;
-	font-weight: 600 !important;
+	font-weight: 400 !important;
 }
 .bullion-ops-toc ol li a {
 	color: #142934 !important;
