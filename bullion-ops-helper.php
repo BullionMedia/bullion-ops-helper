@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.15
+ * Version: 0.9.16
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.15' );
+define( 'BULLION_OPS_VERSION', '0.9.16' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.15)
+	// accidentally match the project slug array below. (v0.9.16)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.15)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.16)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -1640,7 +1640,7 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		. "</script>\n";
 }
 
-// --- Insights grid shortcode (v0.9.15) -------------------------------------
+// --- Insights grid shortcode (v0.9.16) -------------------------------------
 //
 // [insights_grid] renders a card grid of every pillar / cluster page enrolled
 // in bullion_ops_get_pillar_hero_slugs() using the hand-coded
@@ -1726,7 +1726,11 @@ function bullion_ops_render_insights_grid( $atts ) {
 		$link     = get_permalink( $id );
 		$title    = get_the_title( $id );
 		$excerpt  = wp_trim_words( strip_shortcodes( wp_strip_all_tags( get_the_excerpt( $id ) ) ), 20, '&hellip;' );
-		$tag      = ( 0 === (int) $post_obj->post_parent ) ? 'Pillar' : 'Cluster';
+		// Reader-facing content-type labels — "Pillar" / "Cluster" are SEO
+		// jargon and mean nothing to a public reader. "Deep Dive" signals
+		// long-form definitive coverage; "Guide" signals a focused, more
+		// scoped piece. Reasoning captured 2026-07-22.
+		$tag      = ( 0 === (int) $post_obj->post_parent ) ? 'Deep Dive' : 'Guide';
 		$visual   = bullion_ops_get_insights_visual_text( $post_obj->post_name );
 
 		$thumb_html = has_post_thumbnail( $id )
