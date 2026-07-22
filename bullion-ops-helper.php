@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.10
+ * Version: 0.9.11
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.10' );
+define( 'BULLION_OPS_VERSION', '0.9.11' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -955,8 +955,18 @@ function bullion_ops_inject_pillar_hero_css() {
 	color: rgba(255,255,255,.75) !important;
 	font-size: 0.9em !important;
 	margin: 0 !important;
+	padding: 0 !important;
 	display: block !important;
 	text-align: left !important;
+	border: 0 !important;
+	border-bottom: 0 !important;
+	text-decoration: none !important;
+	box-shadow: none !important;
+}
+.asx-article-header .asx-article-meta::after,
+.asx-article-header .asx-article-meta::before {
+	display: none !important;
+	content: none !important;
 }
 .asx-article-header .asx-article-meta span {
 	color: rgba(255,255,255,.75) !important;
@@ -980,7 +990,102 @@ function bullion_ops_get_pillar_hero_slugs() {
 	];
 }
 
-// --- Title-panel meta auto-refresh (v0.9.10) --------------------------------
+// --- Pillar / cluster header auto-wrap (v0.9.11) ---------------------------
+//
+// On enrolled pillar / cluster slugs, ensure the first <h1> and the
+// following .asx-article-meta <p> are wrapped inside a
+// <div class="asx-article-header"> block. This is what
+// bullion_ops_inject_pillar_hero_css targets to float the dark-navy title
+// panel over the hero image band; without it, the header renders as a plain
+// H1 above the meta bar and the TOC lands above the H1.
+//
+// Enrolment reuses bullion_ops_get_pillar_hero_slugs() — same set of pages
+// that carry the hero-band treatment.
+//
+// Priority 3 so this runs BEFORE the title-panel meta refresh (5) and TOC
+// filters (15, 20). Idempotent: skips if .asx-article-header already
+// exists. If no .asx-article-meta follows the H1, synthesizes one with
+// placeholder spans (v0.9.9 auto-refresh then populates real values).
+//
+// Together with v0.9.9 (meta auto-refresh) and v0.9.10 (cluster hero
+// enrolment), this means a drafter can ship a pillar / cluster page with
+// just `<div class="asx-article-wrapper"><h1>Title</h1><p>Body...</p>...</div>`
+// and the plugin fills in the rest: header wrap, meta spans, TOC.
+
+add_filter( 'the_content', 'bullion_ops_ensure_pillar_header', 3 );
+
+function bullion_ops_ensure_pillar_header( $content ) {
+	if ( is_admin() || ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
+		return $content;
+	}
+	$post = get_post();
+	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_pillar_hero_slugs(), true ) ) {
+		return $content;
+	}
+	if ( false !== strpos( $content, 'class="asx-article-header"' ) ) {
+		return $content;
+	}
+	if ( false === strpos( $content, '<h1' ) ) {
+		return $content;
+	}
+	$dom = bullion_ops_toc_load_dom( $content );
+	if ( ! $dom ) {
+		return $content;
+	}
+	$h1s = $dom->getElementsByTagName( 'h1' );
+	if ( 0 === $h1s->length ) {
+		return $content;
+	}
+	$h1     = $h1s->item( 0 );
+	$parent = $h1->parentNode;
+	if ( ! $parent ) {
+		return $content;
+	}
+
+	$meta = null;
+	$next = $h1->nextSibling;
+	while ( $next && XML_ELEMENT_NODE !== $next->nodeType ) {
+		$next = $next->nextSibling;
+	}
+	if ( $next && $next->hasAttribute( 'class' ) && false !== strpos( $next->getAttribute( 'class' ), 'asx-article-meta' ) ) {
+		$meta = $next;
+	}
+
+	$header = $dom->createElement( 'div' );
+	$header->setAttribute( 'class', 'asx-article-header' );
+
+	$insert_before = $h1->nextSibling;
+	$parent->removeChild( $h1 );
+	$header->appendChild( $h1 );
+
+	if ( $meta ) {
+		if ( $insert_before === $meta ) {
+			$insert_before = $meta->nextSibling;
+		}
+		$parent->removeChild( $meta );
+		$header->appendChild( $meta );
+	} else {
+		$meta_p = $dom->createElement( 'p' );
+		$meta_p->setAttribute( 'class', 'asx-article-meta' );
+		$published_str = date_i18n( 'j M Y', strtotime( $post->post_date ) );
+		$updated_str   = date_i18n( 'j M Y', strtotime( $post->post_modified ) );
+		$meta_p->appendChild( $dom->createElement( 'span', '1 min read' ) );
+		$meta_p->appendChild( $dom->createElement( 'span', 'Published ' . $published_str ) );
+		$meta_p->appendChild( $dom->createElement( 'span', 'Updated ' . $updated_str ) );
+		$header->appendChild( $meta_p );
+	}
+
+	if ( $insert_before ) {
+		$parent->insertBefore( $header, $insert_before );
+	} else {
+		$parent->appendChild( $header );
+	}
+
+	$out = bullion_ops_toc_dom_to_html( $dom );
+	return ( null === $out ) ? $content : $out;
+}
+
+// --- Title-panel meta auto-refresh (v0.9.9) --------------------------------
 //
 // Every render, walk the .asx-article-meta block on enrolled pillar / cluster
 // slugs and rewrite:
@@ -993,7 +1098,7 @@ function bullion_ops_get_pillar_hero_slugs() {
 // Enrolment reuses bullion_ops_get_toc_enrolled_slugs() — same set of pages
 // that carry the .asx-article-meta title-panel pattern.
 //
-// Trade-off (recorded in v0.9.10 release notes): any WP edit bumps
+// Trade-off (recorded in v0.9.11 release notes): any WP edit bumps
 // post_modified, so meta-only tweaks will refresh the visible Updated
 // date. Matches Google's post-modified convention.
 
@@ -1237,7 +1342,7 @@ function bullion_ops_toc_render_html( $entries ) {
 	// the theme's default underline / bordered-link style paints a full
 	// four-sided border box around each TOC entry text.
 	//
-	// v0.9.10 semantics: outer <nav aria-label="Table of contents"> creates
+	// v0.9.11 semantics: outer <nav aria-label="Table of contents"> creates
 	// a labelled navigation landmark (accessibility + doc SEO). The inner
 	// <details role="doc-toc"> adds DPUB-ARIA role recognised by
 	// screen readers + Google as a Table of Contents section. Defensive
