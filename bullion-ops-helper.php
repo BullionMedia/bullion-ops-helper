@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.20
+ * Version: 0.9.21
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.20' );
+define( 'BULLION_OPS_VERSION', '0.9.21' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.20)
+	// accidentally match the project slug array below. (v0.9.21)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.20)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.21)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -1664,7 +1664,7 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		. "</script>\n";
 }
 
-// --- Insights grid shortcode (v0.9.20) -------------------------------------
+// --- Insights grid shortcode (v0.9.21) -------------------------------------
 //
 // [insights_grid] renders a card grid of every pillar / cluster page enrolled
 // in bullion_ops_get_pillar_hero_slugs() using the hand-coded
@@ -1817,6 +1817,83 @@ function bullion_ops_get_insights_visual_text( $slug ) {
 		'asx-copper-stocks'            => 'ASX Copper Stocks',
 	];
 	return isset( $map[ $slug ] ) ? $map[ $slug ] : '';
+}
+
+// --- ASX announcement page-enhancement scripts (v0.9.21) -------------------
+//
+// Emits the JS enhancement bundle (blockquote wrapping around management
+// quotes + thead-th unit line-break formatting) via `wp_footer` on every
+// singular asx_announcement page. Previously the same script was emitted
+// inline in post_content by the ASX Webpage Pipeline; wpautop mangled it
+// on the DFS-delivery announcement (2026-07-22), leaking the raw JS
+// source as visible text at the bottom of the article. Moving the emitter
+// into the plugin footer hook makes it wpautop-proof.
+
+add_action( 'wp_footer', 'bullion_ops_inject_asx_announcement_scripts', 20 );
+
+function bullion_ops_inject_asx_announcement_scripts() {
+	if ( ! is_singular( 'asx_announcement' ) ) {
+		return;
+	}
+	?>
+<script id="bullion-ops-asx-announcement-enhancer">
+document.addEventListener('DOMContentLoaded', function() {
+
+	// Wrap consecutive quoted <p> paragraphs inside .asx-official-announcement
+	// in a <blockquote> so management comments render as blockquotes.
+	(function() {
+		var body = document.querySelector('.asx-official-announcement');
+		if (!body) return;
+		var paras = Array.from(body.querySelectorAll('p'));
+		var currentBQ = null;
+		paras.forEach(function(p) {
+			var text = p.textContent.trim();
+			var opensQuote = text.startsWith('“') || text.startsWith('"');
+			var closesQuote = text.endsWith('”') || text.endsWith('"');
+			if (opensQuote) {
+				currentBQ = document.createElement('blockquote');
+				p.parentNode.insertBefore(currentBQ, p);
+				currentBQ.appendChild(p);
+				if (closesQuote) currentBQ = null;
+			} else if (currentBQ) {
+				currentBQ.appendChild(p);
+				if (closesQuote) currentBQ = null;
+			}
+		});
+	})();
+
+	// Split thead th "Label (unit)" pattern into two visual lines, and
+	// style "Not in Mine Plan" columns for the Ore Reserve tables.
+	document.querySelectorAll('.asx-official-announcement thead th').forEach(function(th) {
+		var originalText = th.textContent.trim();
+		var words = originalText.replace(/\s+/g, ' ').split(' ');
+		if (originalText === 'Not in Mine Plan') {
+			th.style.setProperty('background', '#e8eced', 'important');
+			th.style.setProperty('color', '#142934', 'important');
+			th.style.border = '1px solid #dee2e6';
+			var table = th.closest('table');
+			var colIndex = Array.from(th.parentElement.children).indexOf(th);
+			table.querySelectorAll('tbody tr').forEach(function(row) {
+				var cell = row.children[colIndex];
+				if (cell) {
+					cell.style.setProperty('background', '#e8eced', 'important');
+					cell.style.setProperty('color', '#142934', 'important');
+					cell.style.fontStyle = 'italic';
+				}
+			});
+			th.innerHTML = 'Not in<br>Mine Plan';
+			return;
+		}
+		var html = th.innerHTML.replace(/\s+(\([^)]+\))/g, '<br><span style="font-weight:400;opacity:0.85;">$1</span>');
+		if (!html.includes('<br>') && words.length >= 2 && originalText.length > 10) {
+			var mid = Math.ceil(words.length / 2);
+			html = words.slice(0, mid).join(' ') + '<br>' + words.slice(mid).join(' ');
+		}
+		th.innerHTML = html;
+	});
+});
+</script>
+	<?php
 }
 
 // --- Cache purge -----------------------------------------------------------
