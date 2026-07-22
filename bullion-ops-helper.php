@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.22
+ * Version: 0.9.23
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.22' );
+define( 'BULLION_OPS_VERSION', '0.9.23' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.22)
+	// accidentally match the project slug array below. (v0.9.23)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.22)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.23)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -1522,12 +1522,57 @@ add_filter( 'the_content', 'bullion_ops_inject_toc_block', 20 );
 
 add_action( 'wp_head', 'bullion_ops_inject_toc_css', 100 );
 
-function bullion_ops_inject_toc_css() {
+// Enrolment check shared by the CSS + ItemList + Speakable emitters.
+// Slug enrolment covers pillar / cluster; post_type covers every ASX
+// announcement automatically (matches bullion_ops_toc_should_run).
+function bullion_ops_toc_is_enrolled_context() {
 	if ( ! is_singular() ) {
-		return;
+		return false;
 	}
 	$post = get_post();
-	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true ) ) {
+	if ( ! $post ) {
+		return false;
+	}
+	if ( 'asx_announcement' === $post->post_type ) {
+		return true;
+	}
+	return in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true );
+}
+
+// Compact-table styling for ASX announcement pages. Fires on wp_head for any
+// singular asx_announcement so ANY table tagged with class="asx-table-compact"
+// renders with compressed font-size + padding. Rule uses !important so it wins
+// over the theme's default table styling regardless of specificity.
+add_action( 'wp_head', 'bullion_ops_inject_asx_compact_table_css', 100 );
+
+function bullion_ops_inject_asx_compact_table_css() {
+	if ( ! is_singular( 'asx_announcement' ) ) {
+		return;
+	}
+	?>
+<style id="bullion-ops-asx-compact-table-css">
+.asx-official-announcement table.asx-table-compact td {
+	font-size: 11px !important;
+	padding: 4px 8px !important;
+	line-height: 1.3 !important;
+}
+.asx-official-announcement table.asx-table-compact thead th {
+	font-size: 12px !important;
+	padding: 5px 8px !important;
+	line-height: 1.25 !important;
+}
+@media (max-width: 640px) {
+	.asx-official-announcement table.asx-table-compact td {
+		font-size: 10px !important;
+		padding: 3px 6px !important;
+	}
+}
+</style>
+	<?php
+}
+
+function bullion_ops_inject_toc_css() {
+	if ( ! bullion_ops_toc_is_enrolled_context() ) {
 		return;
 	}
 	?>
@@ -1613,17 +1658,14 @@ function bullion_ops_inject_toc_css() {
 add_action( 'wp_head', 'bullion_ops_inject_toc_itemlist_jsonld', 104 );
 
 function bullion_ops_inject_toc_itemlist_jsonld() {
-	if ( ! is_singular() ) {
+	if ( ! bullion_ops_toc_is_enrolled_context() ) {
 		return;
 	}
-	$post = get_post();
-	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true ) ) {
-		return;
-	}
+	$post    = get_post();
 	$entries = bullion_ops_toc_extract_entries_from_content( $post->post_content );
 	$count   = count( $entries );
-	if ( $count < 4 || $count > 20 ) {
-		return; // same gate as the visible TOC block
+	if ( $count < 4 || $count > 40 ) {
+		return; // same gate as the visible TOC block (v0.9.19 raised cap 20 -> 40)
 	}
 	$permalink = get_permalink( $post );
 	if ( ! $permalink ) {
@@ -1652,11 +1694,7 @@ function bullion_ops_inject_toc_itemlist_jsonld() {
 add_action( 'wp_head', 'bullion_ops_inject_toc_speakable_jsonld', 105 );
 
 function bullion_ops_inject_toc_speakable_jsonld() {
-	if ( ! is_singular() ) {
-		return;
-	}
-	$post = get_post();
-	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_toc_enrolled_slugs(), true ) ) {
+	if ( ! bullion_ops_toc_is_enrolled_context() ) {
 		return;
 	}
 	$schema = [
@@ -1672,7 +1710,7 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		. "</script>\n";
 }
 
-// --- Insights grid shortcode (v0.9.22) -------------------------------------
+// --- Insights grid shortcode (v0.9.23) -------------------------------------
 //
 // [insights_grid] renders a card grid of every pillar / cluster page enrolled
 // in bullion_ops_get_pillar_hero_slugs() using the hand-coded
@@ -1827,7 +1865,7 @@ function bullion_ops_get_insights_visual_text( $slug ) {
 	return isset( $map[ $slug ] ) ? $map[ $slug ] : '';
 }
 
-// --- ASX announcement page-enhancement scripts (v0.9.22) -------------------
+// --- ASX announcement page-enhancement scripts (v0.9.23) -------------------
 //
 // Emits the JS enhancement bundle (blockquote wrapping around management
 // quotes + thead-th unit line-break formatting) via `wp_footer` on every
