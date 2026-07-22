@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.19
+ * Version: 0.9.20
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.19' );
+define( 'BULLION_OPS_VERSION', '0.9.20' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -596,7 +596,7 @@ function bullion_ops_inject_project_faq_jsonld() {
 	// asx_announcement CPT or any other custom post type. is_page() is
 	// intentionally stricter than is_singular() so announcement slugs like
 	// "10000m-drilling-program-mt-chalmers-initial-results" can never
-	// accidentally match the project slug array below. (v0.9.19)
+	// accidentally match the project slug array below. (v0.9.20)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -615,7 +615,7 @@ add_action( 'wp_head', 'bullion_ops_inject_project_faq_css', 100 );
 
 function bullion_ops_inject_project_faq_css() {
 	// Same is_page() gate as bullion_ops_inject_project_faq_jsonld() — project
-	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.19)
+	// FAQ CSS must not fire on asx_announcement CPT pages. (v0.9.20)
 	if ( ! is_page() ) {
 		return;
 	}
@@ -1328,6 +1328,25 @@ function bullion_ops_toc_find_insertion_target( $dom, $root ) {
 		return [ 'mode' => 'prepend-in', 'node' => $hits->item( 0 ) ];
 	}
 
+	// ASX announcement pages: sit under the pill-tag meta block
+	// (.asx-meta contains date / ticker / project / type pills). Landing
+	// the TOC here keeps it INSIDE .asx-announcement-wrapper (correct
+	// width + padding) and directly under the tag pills (correct
+	// vertical order).
+	$q_meta = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-meta ")]';
+	$hits   = $xpath->query( $q_meta );
+	if ( $hits && $hits->length > 0 ) {
+		return [ 'mode' => 'after', 'node' => $hits->item( 0 ) ];
+	}
+
+	// Generic announcement fallback: prepend inside .asx-announcement-wrapper
+	// if a meta block isn't present.
+	$q_ann  = '//*[contains(concat(" ", normalize-space(@class), " "), " asx-announcement-wrapper ")]';
+	$hits   = $xpath->query( $q_ann );
+	if ( $hits && $hits->length > 0 ) {
+		return [ 'mode' => 'prepend-in', 'node' => $hits->item( 0 ) ];
+	}
+
 	foreach ( $root->childNodes as $child ) {
 		if ( XML_ELEMENT_NODE === $child->nodeType && 'p' === strtolower( $child->nodeName ) ) {
 			return [ 'mode' => 'after', 'node' => $child ];
@@ -1645,7 +1664,7 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		. "</script>\n";
 }
 
-// --- Insights grid shortcode (v0.9.19) -------------------------------------
+// --- Insights grid shortcode (v0.9.20) -------------------------------------
 //
 // [insights_grid] renders a card grid of every pillar / cluster page enrolled
 // in bullion_ops_get_pillar_hero_slugs() using the hand-coded
