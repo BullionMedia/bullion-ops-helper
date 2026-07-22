@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.9
+ * Version: 0.9.10
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.9' );
+define( 'BULLION_OPS_VERSION', '0.9.10' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -975,11 +975,12 @@ function bullion_ops_get_pillar_hero_slugs() {
 	return [
 		// Pillar
 		'is-copper-a-good-investment',
-		// Cluster posts get added here as they ship.
+		// Cluster posts
+		'asx-copper-stocks',
 	];
 }
 
-// --- Title-panel meta auto-refresh (v0.9.9) --------------------------------
+// --- Title-panel meta auto-refresh (v0.9.10) --------------------------------
 //
 // Every render, walk the .asx-article-meta block on enrolled pillar / cluster
 // slugs and rewrite:
@@ -992,7 +993,7 @@ function bullion_ops_get_pillar_hero_slugs() {
 // Enrolment reuses bullion_ops_get_toc_enrolled_slugs() — same set of pages
 // that carry the .asx-article-meta title-panel pattern.
 //
-// Trade-off (recorded in v0.9.9 release notes): any WP edit bumps
+// Trade-off (recorded in v0.9.10 release notes): any WP edit bumps
 // post_modified, so meta-only tweaks will refresh the visible Updated
 // date. Matches Google's post-modified convention.
 
@@ -1236,7 +1237,7 @@ function bullion_ops_toc_render_html( $entries ) {
 	// the theme's default underline / bordered-link style paints a full
 	// four-sided border box around each TOC entry text.
 	//
-	// v0.9.9 semantics: outer <nav aria-label="Table of contents"> creates
+	// v0.9.10 semantics: outer <nav aria-label="Table of contents"> creates
 	// a labelled navigation landmark (accessibility + doc SEO). The inner
 	// <details role="doc-toc"> adds DPUB-ARIA role recognised by
 	// screen readers + Google as a Table of Contents section. Defensive
