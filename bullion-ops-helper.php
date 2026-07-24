@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.24
+ * Version: 0.9.25
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.24' );
+define( 'BULLION_OPS_VERSION', '0.9.25' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -96,7 +96,104 @@ function bullion_ops_register_routes() {
 		'callback'            => 'bullion_ops_wpcode_search_replace',
 		'permission_callback' => 'bullion_ops_permission',
 	] );
+
+	register_rest_route( BULLION_OPS_NS, '/sitemap/inspect/(?P<id>\d+)', [
+		'methods'             => 'GET',
+		'callback'            => 'bullion_ops_sitemap_inspect',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
 }
+
+// --- Sitemap diagnostic + child-page inclusion filter (v0.9.25) ------------
+//
+// Rank Math's Pages sitemap silently excludes hierarchical child pages on
+// some installs. Diagnostic endpoint returns the raw postmeta + RM's
+// exclusion decision. Output filter guarantees every published `page`
+// with parent != 0 (and Robots Meta == index) appears in the sitemap URL
+// set, overriding any upstream exclusion.
+
+function bullion_ops_sitemap_inspect( WP_REST_Request $req ) {
+	$id   = (int) $req['id'];
+	$post = get_post( $id );
+	if ( ! $post ) {
+		return new WP_Error( 'bullion_ops_not_found', 'post not found', [ 'status' => 404 ] );
+	}
+	$all_meta = get_post_meta( $id );
+	$rm_meta  = [];
+	foreach ( $all_meta as $k => $v ) {
+		if ( strpos( $k, 'rank_math' ) === 0 ) {
+			$rm_meta[ $k ] = count( $v ) === 1 ? $v[0] : $v;
+		}
+	}
+	$excluded_by = null;
+	if ( class_exists( '\\RankMath\\Sitemap\\Sitemap' ) ) {
+		$is_indexable = \RankMath\Helper::is_post_indexable( $id );
+		$excluded_by  = $is_indexable ? 'indexable' : 'RankMath\\Helper::is_post_indexable returned false';
+	}
+	return [
+		'id'                   => $id,
+		'post_type'            => $post->post_type,
+		'post_status'          => $post->post_status,
+		'parent'               => (int) $post->post_parent,
+		'permalink'            => get_permalink( $id ),
+		'rank_math_postmeta'   => $rm_meta,
+		'rm_indexable_verdict' => $excluded_by,
+	];
+}
+
+// Force-include published hierarchical `page` posts in the RM sitemap.
+// Runs on the exclude decision — returning `false` tells RM NOT to exclude.
+add_filter( 'rank_math/sitemap/exclude_post', function( $exclude, $post_id ) {
+	$post = get_post( $post_id );
+	if ( ! $post || 'page' !== $post->post_type ) {
+		return $exclude;
+	}
+	if ( 'publish' !== $post->post_status || (int) $post->post_parent === 0 ) {
+		return $exclude;
+	}
+	// Respect explicit noindex — only override the mysterious hierarchical exclusion.
+	$robots = get_post_meta( $post_id, 'rank_math_robots', true );
+	if ( is_array( $robots ) && in_array( 'noindex', $robots, true ) ) {
+		return $exclude;
+	}
+	return false;
+}, 10, 2 );
+
+// Belt-and-braces: if the URL still doesn't make it into the final set,
+// inject it directly.
+add_filter( 'rank_math/sitemap/urls', function( $urls ) {
+	$pages = get_posts( [
+		'post_type'      => 'page',
+		'post_status'    => 'publish',
+		'posts_per_page' => -1,
+		'post_parent__not_in' => [ 0 ],
+		'fields'         => 'ids',
+	] );
+	if ( empty( $pages ) ) {
+		return $urls;
+	}
+	$existing = [];
+	foreach ( $urls as $u ) {
+		if ( isset( $u['loc'] ) ) {
+			$existing[ $u['loc'] ] = true;
+		}
+	}
+	foreach ( $pages as $pid ) {
+		$robots = get_post_meta( $pid, 'rank_math_robots', true );
+		if ( is_array( $robots ) && in_array( 'noindex', $robots, true ) ) {
+			continue;
+		}
+		$link = get_permalink( $pid );
+		if ( isset( $existing[ $link ] ) ) {
+			continue;
+		}
+		$urls[] = [
+			'loc' => $link,
+			'mod' => get_the_modified_date( DATE_W3C, $pid ),
+		];
+	}
+	return $urls;
+}, 20 );
 
 // --- WPCode snippet CRUD (v0.9.0) ------------------------------------------
 //
@@ -747,13 +844,14 @@ function bullion_ops_get_project_faq_data() {
 		'mt-chalmers' => [
 			'in_summary' => 'Mt Chalmers is QMines\' flagship development project, a high-grade copper-gold deposit 17km from Rockhampton with a completed Pre-Feasibility Study, five resource upgrades in under three years, and a current JORC resource of 11.86Mt at 1.22% copper equivalent. The project\'s shallow open-pit geometry, proximity to established infrastructure, and 316km² of tenure underpin QMines\' strategy of transitioning Mt Chalmers toward production. With 84% of resources in the Measured and Indicated JORC categories, Mt Chalmers represents the company\'s most advanced asset and its primary value-creation pathway.',
 			'faqs' => [
-				[ 'q' => 'What is the Mt Chalmers copper project?',             'a' => 'The Mt Chalmers copper-gold project is QMines\' flagship development asset in Central Queensland, located 17km north-east of Rockhampton. It is a past-producing high-grade copper and gold mine that operated between 1898 and 1982, now being redeveloped by QMines with a completed Pre-Feasibility Study, a declared Ore Reserve, and a Definitive Feasibility Study underway. The project holds a current JORC resource of 11.86Mt at 1.22% copper equivalent and forms the processing centre of QMines\' Multi-Project Copper & Gold Production Hub.' ],
-				[ 'q' => 'Where is the Mt Chalmers project located?',           'a' => 'Mt Chalmers is located 17km north-east of Rockhampton in Queensland, Australia. QMines holds 316km² of tenure at the project.' ],
-				[ 'q' => 'What commodities does Mt Chalmers produce?',          'a' => 'Mt Chalmers is a copper and gold project. The Pre-Feasibility Study defined a contained metal inventory of 65,000 tonnes of copper, 160,000 ounces of gold, 30,600 tonnes of zinc, 1.8 million ounces of silver, and 583,000 tonnes of pyrite.' ],
-				[ 'q' => 'What is the current JORC resource estimate for Mt Chalmers?', 'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.86Mt at 1.22% contained copper equivalent. 84% of these Resources fall in the Measured and Indicated JORC categories, reflecting five resource upgrades completed in under three years.' ],
-				[ 'q' => 'What did the Pre-Feasibility Study show for Mt Chalmers?', 'a' => 'The Pre-Feasibility Study returned a post-tax NPV at an 8% discount rate of $100 million, based on a 1Mtpa processing plant. The study also established a maiden Ore Reserve estimate (Proved and Probable categories).' ],
-				[ 'q' => 'What stage of development is Mt Chalmers at?',        'a' => 'Mt Chalmers is in the development phase. QMines\' strategy involves transitioning the project toward production, leveraging its shallow high-grade open-pit geometry, coastal proximity, and existing infrastructure access.' ],
-				[ 'q' => 'Who owns the Mt Chalmers project?',                   'a' => 'QMines Limited (ASX:QML) holds 100% of the Mt Chalmers project.' ],
+				[ 'q' => 'What is the Mt Chalmers copper-gold project?',        'a' => 'The Mt Chalmers copper-gold project is QMines\' flagship development asset in Central Queensland, located 17km north-east of Rockhampton. It is a past-producing high-grade copper and gold mine that operated between 1898 and 1982, now being redeveloped by QMines with a completed Pre-Feasibility Study, a declared Ore Reserve, and a Definitive Feasibility Study underway. The project holds a current JORC resource of 11.86Mt at 1.22% copper equivalent and forms the processing centre of QMines\' Multi-Project Copper & Gold Production Hub.' ],
+				[ 'q' => 'Where is Mt Chalmers located?',                       'a' => 'Mt Chalmers is located 17km north-east of Rockhampton in Queensland, Australia. QMines holds 316km² of tenure at the project.' ],
+				[ 'q' => 'What copper and gold does Mt Chalmers contain?',      'a' => 'Mt Chalmers contains copper, gold, zinc, silver, and pyrite mineralisation. The Pre-Feasibility Study defined a contained metal inventory of 65,000 tonnes of copper, 160,000 ounces of gold, 30,600 tonnes of zinc, 1.8 million ounces of silver, and 583,000 tonnes of pyrite.' ],
+				[ 'q' => 'What is the JORC resource at Mt Chalmers?',           'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.86Mt at 1.22% contained copper equivalent. 84% of these Resources fall in the Measured and Indicated JORC categories, reflecting five resource upgrades completed in under three years.' ],
+				[ 'q' => 'What did the Mt Chalmers Pre-Feasibility Study find?', 'a' => 'The Pre-Feasibility Study returned a post-tax NPV at an 8% discount rate of $100 million, based on a 1Mtpa processing plant. The study also established a maiden Ore Reserve estimate (Proved and Probable categories).' ],
+				[ 'q' => 'When is the Mt Chalmers DFS due?',                    'a' => 'The Definitive Feasibility Study (DFS) for Mt Chalmers is currently underway. QMines announced a fully-funded DFS delivery program in 2026 and has committed to delivering the DFS results later that year. Updates are released via the ASX as the program progresses.' ],
+				[ 'q' => 'What stage of development is Mt Chalmers at?',        'a' => 'Mt Chalmers is in the development phase with a completed Pre-Feasibility Study, declared Ore Reserve, and a Definitive Feasibility Study underway. QMines\' strategy involves transitioning the project toward production, leveraging its shallow high-grade open-pit geometry, coastal proximity, and existing infrastructure access.' ],
+				[ 'q' => 'Who owns Mt Chalmers?',                               'a' => 'QMines Limited (ASX:QML) holds 100% of the Mt Chalmers project.' ],
 			],
 		],
 		'develin-creek' => [
