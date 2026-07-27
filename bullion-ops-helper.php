@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.27
+ * Version: 0.9.28
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.27' );
+define( 'BULLION_OPS_VERSION', '0.9.28' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -195,26 +195,38 @@ add_filter( 'rank_math/sitemap/urls', function( $urls ) {
 	return $urls;
 }, 20 );
 
-// --- asx_announcement CPT sitemap inclusion (v0.9.26) ----------------------
+// --- asx_announcement CPT sitemap inclusion (v0.9.28) ----------------------
 //
 // Rank Math silently excludes CPTs that are not toggled ON in its Sitemap
 // Settings UI. The asx_announcement CPT (registered by the ASX Webpage
 // Pipeline) is public + has_archive but never appears in sitemap_index.xml
 // because its per-CPT toggle defaults to off.
 //
-// Fix A: force the CPT into RM's registered sitemap post-type list so RM
-// generates asx_announcement-sitemap.xml and adds it to sitemap_index.xml.
+// v0.9.26/0.9.27 attempted this via a `rank_math/sitemap/post_types` filter
+// but that filter name doesn't exist in Rank Math. RM enables CPT sitemaps
+// via the `rank-math-options-sitemap` option (each CPT has a per-key toggle
+// like `pt_asx_announcement_sitemap = 'on'`), NOT via a runtime filter.
 //
-// Fix B (belt-and-braces): if any published asx_announcement post still
-// doesn't make it into the URL set, inject it directly — same pattern as
-// the child-page force-include filter above.
+// v0.9.28 approach: on init, ensure the option carries the correct toggle
+// for asx_announcement. Only writes if the value isn't already 'on', so
+// there's no per-request DB write cost.
+//
+// Belt-and-braces: keep the `rank_math/sitemap/urls` filter to inject any
+// published announcement URL that still doesn't make it into the URL set.
 
-add_filter( 'rank_math/sitemap/post_types', function( $post_types ) {
-	if ( post_type_exists( 'asx_announcement' ) && ! in_array( 'asx_announcement', $post_types, true ) ) {
-		$post_types[] = 'asx_announcement';
+add_action( 'init', function() {
+	if ( ! post_type_exists( 'asx_announcement' ) ) {
+		return;
 	}
-	return $post_types;
-} );
+	$opts = get_option( 'rank-math-options-sitemap', [] );
+	if ( ! is_array( $opts ) ) {
+		$opts = [];
+	}
+	if ( ( $opts['pt_asx_announcement_sitemap'] ?? '' ) !== 'on' ) {
+		$opts['pt_asx_announcement_sitemap'] = 'on';
+		update_option( 'rank-math-options-sitemap', $opts );
+	}
+}, 20 );
 
 add_filter( 'rank_math/sitemap/urls', function( $urls ) {
 	$posts = get_posts( [
