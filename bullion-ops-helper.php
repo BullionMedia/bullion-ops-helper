@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
- * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, and pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages. Used by Bullion Media ops tooling.
- * Version: 0.9.25
+ * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
+ * Version: 0.9.27
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.25' );
+define( 'BULLION_OPS_VERSION', '0.9.27' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -179,6 +179,60 @@ add_filter( 'rank_math/sitemap/urls', function( $urls ) {
 		}
 	}
 	foreach ( $pages as $pid ) {
+		$robots = get_post_meta( $pid, 'rank_math_robots', true );
+		if ( is_array( $robots ) && in_array( 'noindex', $robots, true ) ) {
+			continue;
+		}
+		$link = get_permalink( $pid );
+		if ( isset( $existing[ $link ] ) ) {
+			continue;
+		}
+		$urls[] = [
+			'loc' => $link,
+			'mod' => get_the_modified_date( DATE_W3C, $pid ),
+		];
+	}
+	return $urls;
+}, 20 );
+
+// --- asx_announcement CPT sitemap inclusion (v0.9.26) ----------------------
+//
+// Rank Math silently excludes CPTs that are not toggled ON in its Sitemap
+// Settings UI. The asx_announcement CPT (registered by the ASX Webpage
+// Pipeline) is public + has_archive but never appears in sitemap_index.xml
+// because its per-CPT toggle defaults to off.
+//
+// Fix A: force the CPT into RM's registered sitemap post-type list so RM
+// generates asx_announcement-sitemap.xml and adds it to sitemap_index.xml.
+//
+// Fix B (belt-and-braces): if any published asx_announcement post still
+// doesn't make it into the URL set, inject it directly — same pattern as
+// the child-page force-include filter above.
+
+add_filter( 'rank_math/sitemap/post_types', function( $post_types ) {
+	if ( post_type_exists( 'asx_announcement' ) && ! in_array( 'asx_announcement', $post_types, true ) ) {
+		$post_types[] = 'asx_announcement';
+	}
+	return $post_types;
+} );
+
+add_filter( 'rank_math/sitemap/urls', function( $urls ) {
+	$posts = get_posts( [
+		'post_type'      => 'asx_announcement',
+		'post_status'    => 'publish',
+		'posts_per_page' => -1,
+		'fields'         => 'ids',
+	] );
+	if ( empty( $posts ) ) {
+		return $urls;
+	}
+	$existing = [];
+	foreach ( $urls as $u ) {
+		if ( isset( $u['loc'] ) ) {
+			$existing[ $u['loc'] ] = true;
+		}
+	}
+	foreach ( $posts as $pid ) {
 		$robots = get_post_meta( $pid, 'rank_math_robots', true );
 		if ( is_array( $robots ) && in_array( 'noindex', $robots, true ) ) {
 			continue;
@@ -874,6 +928,22 @@ function bullion_ops_get_project_faq_data() {
 				[ 'q' => 'What is the JORC resource estimate for Mt Mackenzie?', 'a' => 'The Mt Mackenzie Mineral Resource Estimate stands at 3.35Mt at 1.40g/t gold and 8.4g/t silver, for 129,000 ounces of gold and 862,000 ounces of silver. Nearly half of the Resource is classified in the Indicated JORC category, and the deposit remains open in multiple directions.' ],
 				[ 'q' => 'What approvals and studies has Mt Mackenzie completed?', 'a' => 'Mt Mackenzie holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land. The project is currently undergoing further PFS-level work.' ],
 				[ 'q' => 'When did QMines acquire Mt Mackenzie?',               'a' => 'QMines acquired Mt Mackenzie from Resources and Energy Group in mid-2025.' ],
+			],
+		],
+		// Google Ads landing page — dual-purpose investor/discovery page.
+		// FAQPage schema injected here matches the 7 visible Q/A pairs in the
+		// page body. No shortcode needed (FAQs are already in Elementor content).
+		// Added v0.9.27 — 2026-07-27.
+		'the-copper-gold-opportunity-hiding-in-plain-sight' => [
+			'in_summary' => '',
+			'faqs' => [
+				[ 'q' => 'Why is QMines undervalued compared to its peers?',            'a' => 'QMines trades at an EV/Resource multiple of approximately 0.08x, roughly 75% below the average of comparable copper developer peers, despite delivering a completed Pre-Feasibility Study, resource upgrades, a maiden Ore Reserve, and a scalable development plan.' ],
+				[ 'q' => 'What is driving the copper and gold opportunity right now?',  'a' => 'A structural copper deficit exists due to ageing global supply and limited new discoveries, while demand accelerates from electrification, electric vehicles, and renewables. Gold has reached record highs as a safe-haven asset. QMines provides exposure to both metals through its Queensland project portfolio.' ],
+				[ 'q' => 'How advanced is the Mt Chalmers project?',                   'a' => 'Mt Chalmers is a historic high-grade copper-gold producer with a declared Ore Reserve of 9.6Mt, a completed Pre-Feasibility Study showing a $373 million post-tax NPV and 54% IRR, and a Mining Lease Application in progress.' ],
+				[ 'q' => 'What is the role of Develin Creek in the company\'s future?', 'a' => 'Develin Creek serves as a key growth engine with a 4.2Mt at 1.07% Cu resource and high-impact drill results showing near-surface mineralisation that could extend mine life and improve overall project economics when integrated into an updated study.' ],
+				[ 'q' => 'Why is Mount Mackenzie so important?',                       'a' => 'Mount Mackenzie adds 129,000 ounces of gold and 862,000 ounces of silver to the portfolio, brings freehold land, provides operational synergies with the other Queensland projects, diversifies revenue streams, and strengthens regional scale.' ],
+				[ 'q' => 'What is the exploration upside beyond current deposits?',    'a' => 'QMines controls brownfield and greenfield targets including Artillery Road, Woods Shaft, and Mt Warminster within haulage distance of the proposed central processing hub, with multiple untested anomalies representing a robust exploration pipeline.' ],
+				[ 'q' => 'How high could QMines\' share price go?',                    'a' => 'East Coast Research\'s September 2024 report assigned a valuation target of $0.157 per share, representing 138% upside from the price at that time. This is a third-party analyst view, not a company forecast.' ],
 			],
 		],
 	];
