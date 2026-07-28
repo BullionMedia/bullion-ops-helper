@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.28
+ * Version: 0.9.29
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.28' );
+define( 'BULLION_OPS_VERSION', '0.9.29' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -194,6 +194,141 @@ add_filter( 'rank_math/sitemap/urls', function( $urls ) {
 	}
 	return $urls;
 }, 20 );
+
+// --- Defer below-the-fold WebLink widgets on the front page (v0.9.29) ------
+//
+// Measured 2026-07-28: the homepage is 4,235 KB across 143 requests, of which
+// the WebLink investor widgets are 99 requests and 3,373 KB - about 80% of the
+// page. Lab mobile score 55/100, first paint 10.6s. Total Blocking Time is 0ms
+// and the server answers in 20ms, so this is not a CSS/JS execution problem
+// and not a hosting problem: it is purely the weight arriving over a throttled
+// mobile connection. (Real-user CrUX is far better at 1.8s first paint, so
+// this is a moderate win, not an emergency.)
+//
+// There are six WebLink iframes and each is a self-contained page that loads
+// its own copy of jQuery 1.8.2, moment.js and Raphael. We cannot stop WebLink
+// duplicating those - that is their product. What we can control is WHEN each
+// widget loads.
+//
+// Four of the six sit below the fold and nobody sees them during the first
+// paint, so their src is swapped to data-src at render time and restored by
+// IntersectionObserver as the reader approaches them:
+//
+//   DEFER  priceframe2.aspx                 QMines price, below fold
+//   DEFER  priceframe2.aspx?symbol=copper   copper price, below fold
+//   DEFER  chartformresponsive.aspx         QMines chart, below fold
+//   DEFER  copper/chartformresponsive.aspx  copper chart, below fold
+//   KEEP   priceframe.aspx                  share price above the header
+//   KEEP   headlineContentsNoTab.aspx       latest announcements in the hero
+//
+// Done as a server-side rewrite of the rendered HTML rather than by editing
+// the Elementor JSON, because _elementor_data is one long JSON string where a
+// single bad byte breaks the page. Reversible by deactivating the plugin, and
+// it touches nothing the operator edits by hand.
+
+function bullion_ops_weblink_deferred_needles() {
+	// Substrings identifying the below-fold widgets. Deliberately specific:
+	// "priceframe2.aspx" does NOT match the header's "priceframe.aspx".
+	return [ 'priceframe2.aspx', 'chartformresponsive.aspx' ];
+}
+
+add_action( 'template_redirect', 'bullion_ops_weblink_lazy_start' );
+
+function bullion_ops_weblink_lazy_start() {
+	if ( is_admin() || ! is_front_page() ) {
+		return;
+	}
+	// Never rewrite for logged-in editors - Elementor preview and the editor
+	// itself should always see the real, un-deferred markup.
+	if ( is_user_logged_in() ) {
+		return;
+	}
+	ob_start( 'bullion_ops_weblink_lazy_filter' );
+}
+
+function bullion_ops_weblink_lazy_filter( $html ) {
+	if ( stripos( $html, 'weblink' ) === false ) {
+		return $html;
+	}
+	$needles = bullion_ops_weblink_deferred_needles();
+	$count   = 0;
+
+	$html = preg_replace_callback(
+		'#<iframe\b[^>]*>#i',
+		function ( $m ) use ( $needles, &$count ) {
+			$tag = $m[0];
+			if ( stripos( $tag, 'weblink' ) === false ) {
+				return $tag;
+			}
+			$match = false;
+			foreach ( $needles as $n ) {
+				if ( stripos( $tag, $n ) !== false ) {
+					$match = true;
+					break;
+				}
+			}
+			if ( ! $match || stripos( $tag, 'data-bullion-lazy' ) !== false ) {
+				return $tag;
+			}
+			// src -> data-bullion-src so the browser does not fetch it yet.
+			//
+			// The lookbehind rather than a leading \s is deliberate. The real
+			// markup on the QMines homepage is malformed, hand-typed into an
+			// Elementor HTML widget:
+			//     <iframe style=""src ="https://...priceframe2.aspx" ...>
+			// There is NO space before src, and there IS one between src and
+			// the equals sign. Browsers tolerate it; a '\ssrc=' pattern does
+			// not match it at all. (?<![\w-]) still refuses to match srcset
+			// or an already-rewritten data-bullion-src.
+			$new = preg_replace( '#(?<![\w-])src\s*=#i', 'data-bullion-src=', $tag, 1 );
+			if ( $new === null || $new === $tag ) {
+				return $tag; // no src attribute found; leave untouched
+			}
+			$count++;
+			return str_replace( '<iframe', '<iframe data-bullion-lazy="1" loading="lazy"', $new );
+		},
+		$html
+	);
+
+	if ( ! $count ) {
+		return $html;
+	}
+
+	// Restore src shortly before each widget scrolls into view. 600px of
+	// rootMargin means it is normally already loaded by the time it is seen.
+	$js = <<<'JS'
+<script id="bullion-ops-weblink-lazy">
+(function(){
+  var f = document.querySelectorAll('iframe[data-bullion-lazy]');
+  if (!f.length) return;
+  var load = function(el){
+    var s = el.getAttribute('data-bullion-src');
+    if (!s) return;
+    el.removeAttribute('data-bullion-src');
+    el.removeAttribute('data-bullion-lazy');
+    el.setAttribute('src', s);
+  };
+  if (!('IntersectionObserver' in window)) {
+    // Old browser: load everything now rather than leave blank frames.
+    Array.prototype.forEach.call(f, load);
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting) { load(e.target); io.unobserve(e.target); }
+    });
+  }, { rootMargin: '600px 0px' });
+  Array.prototype.forEach.call(f, function(el){ io.observe(el); });
+})();
+</script>
+JS;
+
+	$pos = strripos( $html, '</body>' );
+	if ( $pos === false ) {
+		return $html . $js;
+	}
+	return substr( $html, 0, $pos ) . $js . substr( $html, $pos );
+}
 
 // --- asx_announcement CPT sitemap inclusion (v0.9.28) ----------------------
 //
