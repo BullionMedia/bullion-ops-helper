@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.30
+ * Version: 0.9.31
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.30' );
+define( 'BULLION_OPS_VERSION', '0.9.31' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2189,6 +2189,95 @@ function bullion_ops_get_insights_visual_text( $slug ) {
 // on the DFS-delivery announcement (2026-07-22), leaking the raw JS
 // source as visible text at the bottom of the article. Moving the emitter
 // into the plugin footer hook makes it wpautop-proof.
+
+// ---------------------------------------------------------------------------
+// asx_announcement ARCHIVE (/asx-announcements/)
+// ---------------------------------------------------------------------------
+// Three fixes, all 2026-07-31. QMines runs TWO announcement archives on
+// purpose and they are not duplicates of each other:
+//
+//   /announcements/      the WebLink feed of PDFs exactly as lodged with ASX
+//   /asx-announcements/  the readable HTML pages, with plain-English summary,
+//                        key figures and charts
+//
+// Nothing on either page said which was which, so they read as duplicates to
+// a crawler while serving genuinely different readers. /announcements/ is an
+// Elementor page and was fixed in the editor data; this archive is rendered
+// from a template, so its fixes belong here.
+
+/**
+ * Drop WordPress's "Archives:" prefix from the announcement archive H1.
+ *
+ * The theme renders `get_the_archive_title()` verbatim, so the H1 read
+ * "Archives: ASX Announcements". That prefix is core boilerplate, not copy
+ * anyone wrote, and it pushes the keyword to third word.
+ */
+add_filter( 'get_the_archive_title', 'bullion_ops_asx_archive_title' );
+
+function bullion_ops_asx_archive_title( $title ) {
+	if ( ! is_post_type_archive( 'asx_announcement' ) ) {
+		return $title;
+	}
+	return 'QMines ASX Announcements';
+}
+
+/**
+ * Give the archive its own title tag and meta description.
+ *
+ * Rank Math has no per-object meta for a CPT archive, so this is a filter
+ * rather than a stored value. Both strings deliberately say "read" and
+ * "online" where the PDF archive says "download" and "PDF": that contrast
+ * is the whole point, and without it Google has to guess which page answers
+ * which intent.
+ */
+add_filter( 'rank_math/frontend/title', 'bullion_ops_asx_archive_seo_title' );
+
+function bullion_ops_asx_archive_seo_title( $title ) {
+	if ( ! is_post_type_archive( 'asx_announcement' ) ) {
+		return $title;
+	}
+	return 'Read QMines ASX Announcements Online | ASX:QML';
+}
+
+add_filter( 'rank_math/frontend/description', 'bullion_ops_asx_archive_seo_desc' );
+
+function bullion_ops_asx_archive_seo_desc( $desc ) {
+	if ( ! is_post_type_archive( 'asx_announcement' ) ) {
+		return $desc;
+	}
+	return 'Every QMines (ASX:QML) announcement as a readable web page, with a plain-English summary, key figures and charts. No PDF download required.';
+}
+
+/**
+ * Reciprocal link back to the PDF archive.
+ *
+ * /announcements/ links here; without the return leg, anyone who lands on
+ * the readable pages looking for the lodged document has nowhere to go.
+ *
+ * Rendered server-side on `loop_start` rather than injected with JS. The
+ * theme offers no hook between the page header and the post list, and a
+ * client-side DOM insert is exactly the pattern that produced the runaway
+ * blockquote fixed in v0.9.30. Server-rendered means it is also crawlable,
+ * which is the point of adding it.
+ */
+add_action( 'loop_start', 'bullion_ops_asx_archive_pdf_link' );
+
+function bullion_ops_asx_archive_pdf_link( $query ) {
+	if ( ! is_post_type_archive( 'asx_announcement' ) || ! $query->is_main_query() || is_admin() ) {
+		return;
+	}
+	// loop_start fires per loop; only decorate the first one on the page.
+	static $done = false;
+	if ( $done ) {
+		return;
+	}
+	$done = true;
+
+	echo '<p class="bullion-archive-crosslink" style="margin:0 0 2em;padding:1em 1.25em;background:#f4f6f7;border-left:3px solid #7ab648;">'
+		. 'Looking for the original lodged documents? '
+		. '<a href="' . esc_url( home_url( '/announcements/' ) ) . '">Download QMines ASX announcement PDFs</a>.'
+		. '</p>';
+}
 
 add_action( 'wp_footer', 'bullion_ops_inject_asx_announcement_scripts', 20 );
 
