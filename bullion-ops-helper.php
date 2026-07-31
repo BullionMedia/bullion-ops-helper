@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.31
+ * Version: 0.9.32
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.31' );
+define( 'BULLION_OPS_VERSION', '0.9.32' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2273,7 +2273,10 @@ function bullion_ops_asx_archive_pdf_link( $query ) {
 	}
 	$done = true;
 
-	echo '<p class="bullion-archive-crosslink" style="margin:0 0 2em;padding:1em 1.25em;background:#f4f6f7;border-left:3px solid #7ab648;">'
+	// 16px radius, no accent border: matches the dominant card treatment on
+	// this page (7 other elements use 16px). Operator call 2026-07-31 — the
+	// green left rule read as a callout/alert, which this is not.
+	echo '<p class="bullion-archive-crosslink" style="margin:0 0 2em;padding:1em 1.25em;background:#f4f6f7;border-radius:16px;">'
 		. 'Looking for the original lodged documents? '
 		. '<a href="' . esc_url( home_url( '/announcements/' ) ) . '">Download QMines ASX announcement PDFs</a>.'
 		. '</p>';
