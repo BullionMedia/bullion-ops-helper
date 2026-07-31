@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.29
+ * Version: 0.9.30
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.29' );
+define( 'BULLION_OPS_VERSION', '0.9.30' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2202,23 +2202,51 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Wrap consecutive quoted <p> paragraphs inside .asx-official-announcement
 	// in a <blockquote> so management comments render as blockquotes.
+	//
+	// Three guards, all added 2026-07-31 after the "Resource Growth Drilling"
+	// announcement rendered its blockquote over most of the page and dragged
+	// the figures out of position with it. The management comment had five
+	// paragraphs; the fifth ended `...plans”.` with the full stop AFTER the
+	// closing quote, so endsWith('”') was false, the blockquote never closed,
+	// and every following paragraph and figure was absorbed into it.
 	(function() {
 		var body = document.querySelector('.asx-official-announcement');
 		if (!body) return;
 		var paras = Array.from(body.querySelectorAll('p'));
 		var currentBQ = null;
+
+		// Guard 2: a closing quote mark followed by trailing punctuation still
+		// closes the quote. Covers `plans”.` as well as `plans.”`.
+		function closesQuote(text) {
+			return /[”"][\s.,;:!?]*$/.test(text);
+		}
+
 		paras.forEach(function(p) {
+			// Guard 1: never re-wrap a paragraph the server already placed in
+			// a blockquote. Double-wrapping was what put the runaway quote in
+			// a position to swallow siblings in the first place.
+			if (p.closest('blockquote')) { currentBQ = null; return; }
+
 			var text = p.textContent.trim();
 			var opensQuote = text.startsWith('“') || text.startsWith('"');
-			var closesQuote = text.endsWith('”') || text.endsWith('"');
+
+			// Guard 3: a blockquote may only ever absorb the paragraph that
+			// immediately follows it. Anything else in between (a figure, a
+			// heading, a table) ends the quote. Even if the closing mark is
+			// missing entirely, a runaway can now swallow at most the rest of
+			// one uninterrupted paragraph run, never a figure.
+			if (currentBQ && p.previousElementSibling !== currentBQ) {
+				currentBQ = null;
+			}
+
 			if (opensQuote) {
 				currentBQ = document.createElement('blockquote');
 				p.parentNode.insertBefore(currentBQ, p);
 				currentBQ.appendChild(p);
-				if (closesQuote) currentBQ = null;
+				if (closesQuote(text)) currentBQ = null;
 			} else if (currentBQ) {
 				currentBQ.appendChild(p);
-				if (closesQuote) currentBQ = null;
+				if (closesQuote(text)) currentBQ = null;
 			}
 		});
 	})();
