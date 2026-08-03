@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.36
+ * Version: 0.9.37
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.36' );
+define( 'BULLION_OPS_VERSION', '0.9.37' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -45,6 +45,12 @@ function bullion_ops_register_routes() {
 	register_rest_route( BULLION_OPS_NS, '/grep', [
 		'methods'             => 'GET',
 		'callback'            => 'bullion_ops_grep',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
+
+	register_rest_route( BULLION_OPS_NS, '/dbgrep', [
+		'methods'             => 'GET',
+		'callback'            => 'bullion_ops_dbgrep',
 		'permission_callback' => 'bullion_ops_permission',
 	] );
 
@@ -2197,6 +2203,65 @@ function bullion_ops_grep( WP_REST_Request $req ) {
 		'hit_count'     => count( $hits ),
 		'hits'          => $hits,
 	];
+}
+
+// GET /bullion/v1/dbgrep?needle=Foo
+//
+// Companion to /grep. That one searches files; this searches the four
+// tables that can hold executable or renderable markup: options, posts,
+// postmeta and termmeta. Between them they cover every "code box" a plugin
+// exposes in the admin — WPCode Header & Footer, Elementor custom code,
+// theme mods, widget content, per-post schema overrides.
+//
+// Needed because the stale Organization block was in none of the 17,219
+// files under wp-content, which meant it could only be in the database.
+function bullion_ops_dbgrep( WP_REST_Request $req ) {
+	global $wpdb;
+
+	$needle = (string) $req->get_param( 'needle' );
+	if ( strlen( $needle ) < 3 ) {
+		return new WP_Error( 'bullion_ops_bad_needle', 'needle must be at least 3 characters', [ 'status' => 400 ] );
+	}
+
+	$like = '%' . $wpdb->esc_like( $needle ) . '%';
+	$out  = [];
+
+	$rows = $wpdb->get_results( $wpdb->prepare(
+		"SELECT option_id AS id, option_name AS label, option_value AS body
+		 FROM {$wpdb->options} WHERE option_value LIKE %s LIMIT 40", $like
+	) );
+	foreach ( $rows as $r ) {
+		$out[] = [ 'table' => 'options', 'id' => $r->id, 'label' => $r->label, 'size' => strlen( $r->body ) ];
+	}
+
+	$rows = $wpdb->get_results( $wpdb->prepare(
+		"SELECT ID AS id, post_title AS label, post_type, post_status, post_content AS body
+		 FROM {$wpdb->posts} WHERE post_content LIKE %s LIMIT 40", $like
+	) );
+	foreach ( $rows as $r ) {
+		$out[] = [
+			'table' => 'posts', 'id' => $r->id, 'label' => $r->label,
+			'post_type' => $r->post_type, 'post_status' => $r->post_status, 'size' => strlen( $r->body ),
+		];
+	}
+
+	$rows = $wpdb->get_results( $wpdb->prepare(
+		"SELECT meta_id AS id, post_id, meta_key AS label, meta_value AS body
+		 FROM {$wpdb->postmeta} WHERE meta_value LIKE %s LIMIT 40", $like
+	) );
+	foreach ( $rows as $r ) {
+		$out[] = [ 'table' => 'postmeta', 'id' => $r->id, 'post_id' => $r->post_id, 'label' => $r->label, 'size' => strlen( $r->body ) ];
+	}
+
+	$rows = $wpdb->get_results( $wpdb->prepare(
+		"SELECT meta_id AS id, term_id, meta_key AS label, meta_value AS body
+		 FROM {$wpdb->termmeta} WHERE meta_value LIKE %s LIMIT 20", $like
+	) );
+	foreach ( $rows as $r ) {
+		$out[] = [ 'table' => 'termmeta', 'id' => $r->id, 'term_id' => $r->term_id, 'label' => $r->label, 'size' => strlen( $r->body ) ];
+	}
+
+	return [ 'needle' => $needle, 'hit_count' => count( $out ), 'hits' => $out ];
 }
 
 function bullion_ops_head_hooks() {
