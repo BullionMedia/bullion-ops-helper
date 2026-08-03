@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.32
+ * Version: 0.9.33
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.32' );
+define( 'BULLION_OPS_VERSION', '0.9.33' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -102,6 +102,85 @@ function bullion_ops_register_routes() {
 		'callback'            => 'bullion_ops_sitemap_inspect',
 		'permission_callback' => 'bullion_ops_permission',
 	] );
+
+	register_rest_route( BULLION_OPS_NS, '/rank-math-scores', [
+		'methods'             => 'GET',
+		'callback'            => 'bullion_ops_rank_math_scores',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
+}
+
+// --- Rank Math score capture (v0.9.33) -------------------------------------
+//
+// Master plan Priority 0.2 originally called for the operator to screenshot
+// the SEO Score column in WP Admin for every published page. At 32 URLs that
+// is a miserable job that has to be redone after every remediation pass, so
+// the plan offered a plugin endpoint as the alternative. This is it.
+//
+// Rank Math stores the score in postmeta as `rank_math_seo_score` and is not
+// exposed over the REST API, which is why it could not simply be read with
+// the WP core endpoints.
+//
+// Returns focus keyword and title/description alongside the score, because
+// the score alone is close to useless without knowing what it was scored
+// against. Note the standing finding this endpoint exists to confirm rather
+// than act on: Rank Math scores are a poor signal for this site. Mt Chalmers
+// scored RM-23 against rubric-72 because the plugin's schema work is
+// invisible to Rank Math. Treat sub-40 as a misconfiguration alarm and
+// ignore the number above that.
+
+function bullion_ops_rank_math_scores( WP_REST_Request $req ) {
+	$types = $req->get_param( 'post_type' );
+	$types = $types ? array_map( 'sanitize_key', explode( ',', $types ) )
+	                : [ 'page', 'post', 'asx_announcement' ];
+
+	$q = new WP_Query( [
+		'post_type'      => $types,
+		'post_status'    => 'publish',
+		'posts_per_page' => -1,
+		'fields'         => 'ids',
+		'no_found_rows'  => true,
+	] );
+
+	$rows = [];
+	foreach ( $q->posts as $id ) {
+		$score = get_post_meta( $id, 'rank_math_seo_score', true );
+		$rows[] = [
+			'id'            => $id,
+			'post_type'     => get_post_type( $id ),
+			'title'         => get_the_title( $id ),
+			'url'           => get_permalink( $id ),
+			// Distinguish "Rank Math scored this 0" from "Rank Math has never
+			// scored this page". Both render as an empty column in WP Admin,
+			// which is exactly the ambiguity screenshots could not resolve.
+			'score'         => ( $score === '' || $score === null ) ? null : (int) $score,
+			'focus_keyword' => get_post_meta( $id, 'rank_math_focus_keyword', true ) ?: null,
+			'seo_title'     => get_post_meta( $id, 'rank_math_title', true ) ?: null,
+			'seo_desc'      => get_post_meta( $id, 'rank_math_description', true ) ?: null,
+		];
+	}
+
+	usort( $rows, function ( $a, $b ) {
+		// Unscored first: those are the ones that need attention.
+		if ( $a['score'] === null && $b['score'] !== null ) return -1;
+		if ( $b['score'] === null && $a['score'] !== null ) return 1;
+		return $a['score'] <=> $b['score'];
+	} );
+
+	$scored = array_filter( $rows, function ( $r ) { return $r['score'] !== null; } );
+	$vals   = array_column( $scored, 'score' );
+
+	return [
+		'generated'   => current_time( 'c' ),
+		'rank_math'   => defined( 'RANK_MATH_VERSION' ) ? RANK_MATH_VERSION : null,
+		'post_types'  => $types,
+		'total'       => count( $rows ),
+		'scored'      => count( $scored ),
+		'unscored'    => count( $rows ) - count( $scored ),
+		'average'     => $vals ? round( array_sum( $vals ) / count( $vals ), 1 ) : null,
+		'below_40'    => count( array_filter( $vals, function ( $v ) { return $v < 40; } ) ),
+		'items'       => $rows,
+	];
 }
 
 // --- Sitemap diagnostic + child-page inclusion filter (v0.9.25) ------------
