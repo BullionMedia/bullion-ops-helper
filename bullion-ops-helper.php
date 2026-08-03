@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.34
+ * Version: 0.9.35
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.34' );
+define( 'BULLION_OPS_VERSION', '0.9.35' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2103,6 +2103,22 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		. wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
 		. "</script>\n";
 }
+
+// --- Current year shortcode (v0.9.35) --------------------------------------
+//
+// [current_year] outputs the current four-digit year in the site's timezone,
+// so footer copyright lines stop needing a manual edit every January.
+//
+// Usage in the Elementor footer text widget:
+//   <p>&copy;[current_year] QMines Limited | All Rights Reserved</p>
+//
+// Site timezone matters here: a server on UTC would roll the year over at
+// 10am Brisbane time on 1 January and show the wrong year for ten hours.
+// date_i18n() respects the WordPress timezone setting; date() would not.
+function bullion_ops_current_year_shortcode() {
+	return date_i18n( 'Y' );
+}
+add_shortcode( 'current_year', 'bullion_ops_current_year_shortcode' );
 
 // --- Insights grid shortcode (v0.9.23) -------------------------------------
 //
