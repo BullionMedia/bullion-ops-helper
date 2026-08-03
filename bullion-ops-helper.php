@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.35
+ * Version: 0.9.36
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.35' );
+define( 'BULLION_OPS_VERSION', '0.9.36' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -39,6 +39,18 @@ function bullion_ops_register_routes() {
 	register_rest_route( BULLION_OPS_NS, '/ping', [
 		'methods'             => 'GET',
 		'callback'            => 'bullion_ops_ping',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
+
+	register_rest_route( BULLION_OPS_NS, '/grep', [
+		'methods'             => 'GET',
+		'callback'            => 'bullion_ops_grep',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
+
+	register_rest_route( BULLION_OPS_NS, '/head-hooks', [
+		'methods'             => 'GET',
+		'callback'            => 'bullion_ops_head_hooks',
 		'permission_callback' => 'bullion_ops_permission',
 	] );
 
@@ -2102,6 +2114,130 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 	echo "\n<script type=\"application/ld+json\">"
 		. wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
 		. "</script>\n";
+}
+
+// --- Diagnostics: grep + wp_head hook dump (v0.9.36) -----------------------
+//
+// Built while hunting a stale Organization JSON-LD block that was rendering
+// on every page. It was not in any WPCode snippet, not in the theme, not in
+// this plugin, and not in the WPCode Header box — every candidate ruled out
+// by inspection, with no way left to find it short of reading the whole
+// install by hand. These two endpoints replace that guesswork.
+//
+//   GET /bullion/v1/grep?needle=Foo[&dir=wp-content][&ext=php,html]
+//     Recursive literal search under WP_CONTENT_DIR. Returns file, line
+//     number and a trimmed excerpt. Read-only.
+//
+//   GET /bullion/v1/head-hooks
+//     Every callback registered on wp_head, in priority order, resolved to
+//     the file and line it is defined in. Names the culprit when output
+//     appears in the head and nothing obvious accounts for it.
+//
+// Both are admin-only via bullion_ops_permission.
+
+function bullion_ops_grep( WP_REST_Request $req ) {
+	$needle = (string) $req->get_param( 'needle' );
+	if ( strlen( $needle ) < 3 ) {
+		return new WP_Error( 'bullion_ops_bad_needle', 'needle must be at least 3 characters', [ 'status' => 400 ] );
+	}
+
+	// Confine the search to wp-content. realpath() then prefix-check defeats
+	// any ../ traversal in the dir param.
+	$base = realpath( WP_CONTENT_DIR );
+	$sub  = (string) $req->get_param( 'dir' );
+	$root = $sub ? realpath( WP_CONTENT_DIR . '/' . ltrim( str_replace( 'wp-content', '', $sub ), '/' ) ) : $base;
+	if ( ! $root || strpos( $root, $base ) !== 0 ) {
+		$root = $base;
+	}
+
+	$ext_param = (string) $req->get_param( 'ext' );
+	$exts      = $ext_param ? array_filter( array_map( 'trim', explode( ',', $ext_param ) ) )
+	                        : [ 'php', 'html', 'htm', 'js', 'json', 'txt' ];
+
+	$hits    = [];
+	$scanned = 0;
+	$it      = new RecursiveIteratorIterator(
+		new RecursiveDirectoryIterator( $root, FilesystemIterator::SKIP_DOTS ),
+		RecursiveIteratorIterator::LEAVES_ONLY
+	);
+
+	foreach ( $it as $file ) {
+		if ( count( $hits ) >= 200 ) {
+			break;
+		}
+		if ( ! $file->isFile() || $file->getSize() > 3145728 ) {
+			continue;
+		}
+		if ( ! in_array( strtolower( $file->getExtension() ), $exts, true ) ) {
+			continue;
+		}
+		$scanned++;
+		$body = @file_get_contents( $file->getPathname() );
+		if ( $body === false || strpos( $body, $needle ) === false ) {
+			continue;
+		}
+		foreach ( explode( "\n", $body ) as $i => $line ) {
+			if ( strpos( $line, $needle ) !== false ) {
+				$hits[] = [
+					'file'    => str_replace( WP_CONTENT_DIR, 'wp-content', $file->getPathname() ),
+					'line'    => $i + 1,
+					'excerpt' => trim( substr( $line, max( 0, strpos( $line, $needle ) - 60 ), 200 ) ),
+				];
+				if ( count( $hits ) >= 200 ) {
+					break 2;
+				}
+			}
+		}
+	}
+
+	return [
+		'needle'        => $needle,
+		'root'          => str_replace( WP_CONTENT_DIR, 'wp-content', $root ),
+		'files_scanned' => $scanned,
+		'hit_count'     => count( $hits ),
+		'hits'          => $hits,
+	];
+}
+
+function bullion_ops_head_hooks() {
+	global $wp_filter;
+
+	if ( empty( $wp_filter['wp_head'] ) ) {
+		return [ 'error' => 'no wp_head callbacks registered in this request context' ];
+	}
+
+	$out = [];
+	foreach ( $wp_filter['wp_head']->callbacks as $priority => $callbacks ) {
+		foreach ( $callbacks as $cb ) {
+			$fn   = $cb['function'];
+			$name = '(closure)';
+			$ref  = null;
+
+			try {
+				if ( is_string( $fn ) ) {
+					$name = $fn;
+					$ref  = new ReflectionFunction( $fn );
+				} elseif ( is_array( $fn ) ) {
+					$cls  = is_object( $fn[0] ) ? get_class( $fn[0] ) : (string) $fn[0];
+					$name = $cls . '::' . $fn[1];
+					$ref  = new ReflectionMethod( $cls, $fn[1] );
+				} elseif ( $fn instanceof Closure ) {
+					$ref = new ReflectionFunction( $fn );
+				}
+			} catch ( Throwable $e ) {
+				$ref = null;
+			}
+
+			$out[] = [
+				'priority' => $priority,
+				'callback' => $name,
+				'file'     => $ref ? str_replace( ABSPATH, '', (string) $ref->getFileName() ) : null,
+				'line'     => $ref ? $ref->getStartLine() : null,
+			];
+		}
+	}
+
+	return [ 'count' => count( $out ), 'callbacks' => $out ];
 }
 
 // --- Current year shortcode (v0.9.35) --------------------------------------
