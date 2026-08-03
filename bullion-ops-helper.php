@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.33
+ * Version: 0.9.34
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.33' );
+define( 'BULLION_OPS_VERSION', '0.9.34' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1128,7 +1128,7 @@ function bullion_ops_get_project_faq_data() {
 				[ 'q' => 'Where is Mt Chalmers located?',                       'a' => 'Mt Chalmers is located 17km north-east of Rockhampton in Queensland, Australia. QMines holds 316km² of tenure at the project.' ],
 				[ 'q' => 'What copper and gold does Mt Chalmers contain?',      'a' => 'Mt Chalmers contains copper, gold, zinc, silver, and pyrite mineralisation. The Pre-Feasibility Study defined a contained metal inventory of 65,000 tonnes of copper, 160,000 ounces of gold, 30,600 tonnes of zinc, 1.8 million ounces of silver, and 583,000 tonnes of pyrite.' ],
 				[ 'q' => 'What is the JORC resource at Mt Chalmers?',           'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.86Mt at 1.22% contained copper equivalent. 84% of these Resources fall in the Measured and Indicated JORC categories, reflecting five resource upgrades completed in under three years.' ],
-				[ 'q' => 'What did the Mt Chalmers Pre-Feasibility Study find?', 'a' => 'The Pre-Feasibility Study returned a post-tax NPV at an 8% discount rate of $100 million, based on a 1Mtpa processing plant. The study also established a maiden Ore Reserve estimate (Proved and Probable categories).' ],
+				[ 'q' => 'What did the Mt Chalmers Pre-Feasibility Study find?', 'a' => 'The Pre-Feasibility Study returned a pre-tax Net Present Value (NPV8) of $373 million and a 54% Internal Rate of Return, based on a stand-alone 1Mtpa processing plant with a 10.4 year initial mine life and a capital cost estimate of A$191 million. The study also declared a maiden Ore Reserve of 9.6Mt (Proved and Probable).' ],
 				[ 'q' => 'When is the Mt Chalmers DFS due?',                    'a' => 'The Definitive Feasibility Study (DFS) for Mt Chalmers is currently underway. QMines announced a fully-funded DFS delivery program in 2026 and has committed to delivering the DFS results later that year. Updates are released via the ASX as the program progresses.' ],
 				[ 'q' => 'What stage of development is Mt Chalmers at?',        'a' => 'Mt Chalmers is in the development phase with a completed Pre-Feasibility Study, declared Ore Reserve, and a Definitive Feasibility Study underway. QMines\' strategy involves transitioning the project toward production, leveraging its shallow high-grade open-pit geometry, coastal proximity, and existing infrastructure access.' ],
 				[ 'q' => 'Who owns Mt Chalmers?',                               'a' => 'QMines Limited (ASX:QML) holds 100% of the Mt Chalmers project.' ],
@@ -1165,7 +1165,7 @@ function bullion_ops_get_project_faq_data() {
 			'faqs' => [
 				[ 'q' => 'Why is QMines undervalued compared to its peers?',            'a' => 'QMines trades at an EV/Resource multiple of approximately 0.08x, roughly 75% below the average of comparable copper developer peers, despite delivering a completed Pre-Feasibility Study, resource upgrades, a maiden Ore Reserve, and a scalable development plan.' ],
 				[ 'q' => 'What is driving the copper and gold opportunity right now?',  'a' => 'A structural copper deficit exists due to ageing global supply and limited new discoveries, while demand accelerates from electrification, electric vehicles, and renewables. Gold has reached record highs as a safe-haven asset. QMines provides exposure to both metals through its Queensland project portfolio.' ],
-				[ 'q' => 'How advanced is the Mt Chalmers project?',                   'a' => 'Mt Chalmers is a historic high-grade copper-gold producer with a declared Ore Reserve of 9.6Mt, a completed Pre-Feasibility Study showing a $373 million post-tax NPV and 54% IRR, and a Mining Lease Application in progress.' ],
+				[ 'q' => 'How advanced is the Mt Chalmers project?',                   'a' => 'Mt Chalmers is a historic high-grade copper-gold producer with a declared Ore Reserve of 9.6Mt, a completed Pre-Feasibility Study showing a $373 million pre-tax NPV (NPV8) and 54% IRR, and a Mining Lease Application in progress.' ],
 				[ 'q' => 'What is the role of Develin Creek in the company\'s future?', 'a' => 'Develin Creek serves as a key growth engine with a 4.2Mt at 1.07% Cu resource and high-impact drill results showing near-surface mineralisation that could extend mine life and improve overall project economics when integrated into an updated study.' ],
 				[ 'q' => 'Why is Mount Mackenzie so important?',                       'a' => 'Mount Mackenzie adds 129,000 ounces of gold and 862,000 ounces of silver to the portfolio, brings freehold land, provides operational synergies with the other Queensland projects, diversifies revenue streams, and strengthens regional scale.' ],
 				[ 'q' => 'What is the exploration upside beyond current deposits?',    'a' => 'QMines controls brownfield and greenfield targets including Artillery Road, Woods Shaft, and Mt Warminster within haulage distance of the proposed central processing hub, with multiple untested anomalies representing a robust exploration pipeline.' ],
