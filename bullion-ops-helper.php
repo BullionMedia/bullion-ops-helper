@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.37
+ * Version: 0.9.38
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.37' );
+define( 'BULLION_OPS_VERSION', '0.9.38' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1207,7 +1207,15 @@ function bullion_ops_get_project_faq_data() {
 // Shipping on wp_head at priority 100 (same as project FAQ schema) so all
 // schema blocks land together in the <head>.
 
-add_action( 'wp_head', 'bullion_ops_inject_pillar_breadcrumbs', 100 );
+// RETIRED v0.9.38. Rank Math now emits the correct trail on both the pillar
+// (2 levels) and the cluster (3 levels: Home > pillar > cluster), verified on
+// live 2026-08-04, and its version carries an @id where this one did not. Two
+// BreadcrumbLists with the identical trail is redundant markup, so this hook
+// is no longer registered. The builder below is kept, not deleted: if Rank
+// Math's CPT breadcrumb handling regresses, re-adding the add_action line
+// restores it. That regression is what this was written for (task #25).
+//
+// add_action( 'wp_head', 'bullion_ops_inject_pillar_breadcrumbs', 100 );
 
 function bullion_ops_inject_pillar_breadcrumbs() {
 	if ( ! is_singular() ) {
@@ -2109,9 +2117,15 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 	if ( ! bullion_ops_toc_is_enrolled_context() ) {
 		return;
 	}
+	// Carry Rank Math's WebPage @id so this MERGES into the existing node
+	// instead of standing up a second, anonymous WebPage for the same URL.
+	// Rank Math uses "<permalink>#webpage"; matching it means the speakable
+	// property attaches to the page entity Google already knows about.
+	// Without this the page served two WebPage entities (v0.9.38).
 	$schema = [
 		'@context'  => 'https://schema.org',
 		'@type'     => 'WebPage',
+		'@id'       => trailingslashit( get_permalink() ) . '#webpage',
 		'speakable' => [
 			'@type'       => 'SpeakableSpecification',
 			'cssSelector' => [ '.bullion-ops-toc', '.entry-content > p:first-of-type' ],
