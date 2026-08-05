@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.40
+ * Version: 0.9.41
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.40' );
+define( 'BULLION_OPS_VERSION', '0.9.41' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3170,3 +3170,24 @@ function bullion_ops_flush_wpcode_cache() {
 	return $result;
 }
 
+
+// --- v0.9.41: drop the theme's duplicate meta description ------------------
+//
+// Hello Elementor emits its own <meta name="description"> from the post
+// excerpt, at wp_head priority 10 (hello-elementor/functions.php:199). Rank
+// Math has already written one, so every page carrying an excerpt serves two
+// competing description tags.
+//
+// Only announcement pages are affected in practice, because only they carry
+// excerpts — all 10 of them, on live and dev, verified 5 Aug 2026 via the
+// /head-hooks endpoint and by counting the rendered tags.
+//
+// Guarded on Rank Math being active: if it is ever disabled, the theme's tag
+// is the only description the page would have, and removing it unguarded
+// would silently strip the description site-wide instead of de-duplicating it.
+add_action( 'wp_head', function() {
+	if ( ! defined( 'RANK_MATH_VERSION' ) ) {
+		return;
+	}
+	remove_action( 'wp_head', 'hello_elementor_add_description_meta_tag', 10 );
+}, 1 );
