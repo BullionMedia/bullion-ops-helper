@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.38
+ * Version: 0.9.39
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.38' );
+define( 'BULLION_OPS_VERSION', '0.9.39' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -575,12 +575,17 @@ function bullion_ops_wpcode_search_replace( WP_REST_Request $req ) {
 		return $result;
 	}
 
+	$flushed = function_exists( 'bullion_ops_flush_wpcode_cache' )
+		? bullion_ops_flush_wpcode_cache()
+		: [];
+
 	return [
 		'ok'            => true,
 		'snippet_id'    => $id,
 		'replacements'  => $count,
 		'before_length' => strlen( $before ),
 		'after_length'  => strlen( $after ),
+		'cache_flushed' => $flushed,
 	];
 }
 
@@ -3026,4 +3031,129 @@ function bullion_ops_post_to_notion( $db_id, array $properties ) {
 	}
 
 	return is_array( $parsed ) ? $parsed : [];
+}
+
+// --- v0.9.39: decode HTML entities inside JSON-LD string values -------------
+//
+// JSON-LD is not HTML. Rank Math builds its @graph from post titles that have
+// already been HTML-escaped, so a title containing "&" ships as the literal
+// characters "&amp;" (or "&#038;") inside the JSON string — and that is what a
+// rich result renders, ampersand codes and all.
+//
+// Verified 5 Aug 2026 on the QIC-inspect announcement: six affected strings,
+// including NewsArticle.headline and WebPage.name reading "Queensland
+// Government &amp; QIC Inspect Mt Chalmers | ASX:QML", plus the BreadcrumbList
+// leaf carrying "&#038;". Every page whose title contains an ampersand is
+// affected, so this is fixed centrally rather than by rewriting titles.
+//
+// Walks the whole graph because the offending strings sit at several depths:
+// top-level headline, nested WebPage.name, and inside BreadcrumbList
+// itemListElement. URLs are left alone — decoding is a no-op on a clean URL,
+// but skipping them avoids touching anything that legitimately contains an
+// encoded character.
+function bullion_ops_decode_jsonld_entities( $value ) {
+	if ( is_array( $value ) ) {
+		foreach ( $value as $k => $v ) {
+			$value[ $k ] = bullion_ops_decode_jsonld_entities( $v );
+		}
+		return $value;
+	}
+
+	if ( ! is_string( $value ) || strpos( $value, '&' ) === false ) {
+		return $value;
+	}
+
+	// Leave URLs untouched.
+	if ( preg_match( '#^https?://#i', $value ) ) {
+		return $value;
+	}
+
+	return html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+}
+
+add_filter( 'rank_math/json_ld', function( $data, $jsonld ) {
+	return bullion_ops_decode_jsonld_entities( $data );
+}, 99, 2 );
+
+// --- v0.9.39: enrich Rank Math's Organization node -------------------------
+//
+// Rank Math publishes an Organization with name, url, address, logo, phone and
+// description, but NOT `sameAs` (the social profiles) or `tickerSymbol`. Those
+// two were supplied by WPCode snippet 18133, which wrapped them in a second
+// standalone WebSite entity — so the site served two WebSite nodes, and the
+// audit's advice to simply delete the snippet would have taken the socials and
+// the ASX ticker down with it.
+//
+// Moving them here puts the company's identity schema in version control
+// instead of an un-diffable WPCode snippet, and lets 18133 be deleted safely.
+// Merges rather than overwrites: anything Rank Math already sets wins, so this
+// cannot silently clobber a value set in the Rank Math UI.
+function bullion_ops_organization_identity() {
+	return [
+		'alternateName' => 'QMines',
+		'tickerSymbol'  => 'ASX:QML',
+		'sameAs'        => [
+			'https://www.facebook.com/qmines',
+			'https://www.linkedin.com/company/qmines',
+			'https://twitter.com/QminesL',
+			'https://www.youtube.com/@QMines',
+		],
+	];
+}
+
+add_filter( 'rank_math/json_ld', function( $data, $jsonld ) {
+	if ( ! is_array( $data ) ) {
+		return $data;
+	}
+	foreach ( $data as $key => $node ) {
+		if ( ! is_array( $node ) ) {
+			continue;
+		}
+		$is_org = ( isset( $node['@type'] ) && 'Organization' === $node['@type'] )
+			|| ( isset( $node['@id'] ) && substr( $node['@id'], -14 ) === '#organization' );
+		if ( ! $is_org ) {
+			continue;
+		}
+		foreach ( bullion_ops_organization_identity() as $prop => $value ) {
+			if ( empty( $node[ $prop ] ) ) {
+				$data[ $key ][ $prop ] = $value;
+			}
+		}
+	}
+	return $data;
+}, 98, 2 );
+
+// --- v0.9.39: flush WPCode's snippet cache after a remote edit --------------
+//
+// WPCode renders from a cached option, not from post_content, so the
+// search-replace endpoint above wrote to the database and changed nothing on
+// the page until someone opened the snippet in wp-admin and pressed Save.
+// That made remote snippet edits look like they had worked when they had not.
+function bullion_ops_flush_wpcode_cache() {
+	$flushed = [];
+
+	if ( function_exists( 'wpcode' ) ) {
+		$wpcode = wpcode();
+		if ( is_object( $wpcode ) && isset( $wpcode->cache ) && is_object( $wpcode->cache ) ) {
+			if ( method_exists( $wpcode->cache, 'clear_all' ) ) {
+				$wpcode->cache->clear_all();
+				$flushed[] = 'wpcode->cache->clear_all';
+			} elseif ( method_exists( $wpcode->cache, 'clear' ) ) {
+				$wpcode->cache->clear();
+				$flushed[] = 'wpcode->cache->clear';
+			}
+		}
+	}
+
+	foreach ( [ 'wpcode_snippets', 'wpcode_snippets_cache' ] as $option ) {
+		if ( false !== get_option( $option, false ) ) {
+			delete_option( $option );
+			$flushed[] = 'deleted:' . $option;
+		}
+	}
+
+	wp_cache_flush();
+	$flushed[] = 'wp_cache_flush';
+
+	return $flushed;
 }
