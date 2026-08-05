@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.39
+ * Version: 0.9.40
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.39' );
+define( 'BULLION_OPS_VERSION', '0.9.40' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3130,30 +3130,43 @@ add_filter( 'rank_math/json_ld', function( $data, $jsonld ) {
 // the page until someone opened the snippet in wp-admin and pressed Save.
 // That made remote snippet edits look like they had worked when they had not.
 function bullion_ops_flush_wpcode_cache() {
-	$flushed = [];
+	$result = [ 'rebuilt' => false, 'method' => null, 'warning' => null ];
 
+	// Use WPCode's own cache API if it exposes one. This is the ONLY safe way
+	// to make a remote edit take effect.
 	if ( function_exists( 'wpcode' ) ) {
 		$wpcode = wpcode();
 		if ( is_object( $wpcode ) && isset( $wpcode->cache ) && is_object( $wpcode->cache ) ) {
-			if ( method_exists( $wpcode->cache, 'clear_all' ) ) {
-				$wpcode->cache->clear_all();
-				$flushed[] = 'wpcode->cache->clear_all';
-			} elseif ( method_exists( $wpcode->cache, 'clear' ) ) {
-				$wpcode->cache->clear();
-				$flushed[] = 'wpcode->cache->clear';
+			foreach ( [ 'clear_all', 'clear' ] as $method ) {
+				if ( method_exists( $wpcode->cache, $method ) ) {
+					$wpcode->cache->$method();
+					$result['rebuilt'] = true;
+					$result['method']  = 'wpcode->cache->' . $method;
+					return $result;
+				}
 			}
 		}
 	}
 
-	foreach ( [ 'wpcode_snippets', 'wpcode_snippets_cache' ] as $option ) {
-		if ( false !== get_option( $option, false ) ) {
-			delete_option( $option );
-			$flushed[] = 'deleted:' . $option;
-		}
-	}
+	// NEVER delete the wpcode_snippets option.
+	//
+	// v0.9.39 did exactly that, on the assumption the name meant a disposable
+	// cache. It is the compiled registry WPCode executes from, and it does not
+	// rebuild on a front-end request. Deleting it on 5 Aug 2026 left every
+	// snippet on qmines.com.au and dev intact in the database but none of them
+	// running — no announcement TOC, no compact-table CSS, no FAQPage or
+	// ItemList schema, no ticker bar, no script-delay performance snippets —
+	// until an operator opened wp-admin and pressed Update. The site looked
+	// healthy the whole time: HTTP 200, full page weight, no error.
+	//
+	// If WPCode exposes no cache API, the honest answer is that a remote edit
+	// cannot take effect on its own. Say so, rather than reaching for the
+	// option and hoping.
+	$result['warning'] = 'WPCode exposes no cache API on this install; the '
+		. 'snippet was written to the database but will not render until an '
+		. 'admin opens the snippet in wp-admin and clicks Update. Do not '
+		. 'delete the wpcode_snippets option to force it.';
 
-	wp_cache_flush();
-	$flushed[] = 'wp_cache_flush';
-
-	return $flushed;
+	return $result;
 }
+
