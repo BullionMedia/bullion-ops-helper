@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.41
+ * Version: 0.9.42
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.41' );
+define( 'BULLION_OPS_VERSION', '0.9.42' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1170,13 +1170,14 @@ function bullion_ops_get_project_faq_data() {
 			],
 		],
 		'mt-mackenzie' => [
-			'in_summary' => 'Mt Mackenzie is a 100%-owned gold and silver project located approximately 140km northwest of Rockhampton, Queensland, carrying a JORC resource of 3.35Mt at 1.40g/t gold and 8.4g/t silver for 129,000 ounces of gold and 862,000 ounces of silver. The project holds a granted Mining Development Licence (MDL 2008), completed Scoping Study, and freehold land, supporting its near-term development potential. Located 45km from Develin Creek, Mt Mackenzie forms part of QMines\' emerging central Queensland production hub.',
+			'in_summary' => 'Mt Mackenzie is a 100%-owned gold and silver project located approximately 140km northwest of Rockhampton, Queensland, carrying a JORC Mineral Resource of 5.2Mt at 1.01g/t gold and 6.7g/t silver for 170,000 ounces of gold and 1.12 million ounces of silver. The project holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land, supporting its near-term development potential. Located 45km from Develin Creek, Mt Mackenzie forms part of QMines\' Multi-Project Copper &amp; Gold Production Hub in Central Queensland.',
 			'faqs' => [
 				[ 'q' => 'Where is the Mt Mackenzie project located?',          'a' => 'Mt Mackenzie is located approximately 140km northwest of Rockhampton in Queensland, Australia, and approximately 45km from QMines\' Develin Creek project.' ],
 				[ 'q' => 'What commodities does Mt Mackenzie contain?',         'a' => 'Mt Mackenzie is a gold and silver project, with shallow high-grade oxide and primary mineralisation suited to open-pit mining.' ],
-				[ 'q' => 'What is the JORC resource estimate for Mt Mackenzie?', 'a' => 'The Mt Mackenzie Mineral Resource Estimate stands at 3.35Mt at 1.40g/t gold and 8.4g/t silver, for 129,000 ounces of gold and 862,000 ounces of silver. Nearly half of the Resource is classified in the Indicated JORC category, and the deposit remains open in multiple directions.' ],
+				[ 'q' => 'What is the JORC resource estimate for Mt Mackenzie?', 'a' => 'The Mt Mackenzie Mineral Resource Estimate stands at 5.2Mt at 1.01g/t gold and 6.7g/t silver, for 170,000 ounces of gold and approximately 1.12 million ounces of silver. Approximately 70% of the contained gold is classified in the Indicated JORC category, and the deposit remains open along strike and at depth.' ],
 				[ 'q' => 'What approvals and studies has Mt Mackenzie completed?', 'a' => 'Mt Mackenzie holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land. The project is currently undergoing further PFS-level work.' ],
 				[ 'q' => 'When did QMines acquire Mt Mackenzie?',               'a' => 'QMines acquired Mt Mackenzie from Resources and Energy Group in mid-2025.' ],
+				[ 'q' => 'How has the Mt Mackenzie resource grown since QMines acquired the project?', 'a' => 'Since acquiring the project, QMines has increased the Resource by 32% in contained gold and 30% in contained silver. The Resource now stands at 5.2Mt at 1.01g/t gold and 6.7g/t silver for 170,000 ounces of gold and 1.12 million ounces of silver, with approximately 70% of contained gold classified as Indicated.' ],
 			],
 		],
 		// Google Ads landing page — dual-purpose investor/discovery page.
@@ -3191,3 +3192,36 @@ add_action( 'wp_head', function() {
 	}
 	remove_action( 'wp_head', 'hello_elementor_add_description_meta_tag', 10 );
 }, 1 );
+
+// --- v0.9.42: expose Rank Math meta on pages to the REST API ---------------
+//
+// Rank Math stores its title and description in postmeta but does not
+// register those keys for REST on the `page` post type. A PATCH to
+// /wp/v2/pages/<id> carrying meta.rank_math_title therefore returns 200 and
+// silently discards the value — the write looks like it worked and the
+// database is unchanged.
+//
+// Hit on 5 Aug 2026 updating /mt-mackenzie/, whose meta title still read
+// "Mt Mackenzie: 129koz Gold Project" after the resource was upgraded to
+// 170koz. Same shape as the WPCode registry and the Elementor render source:
+// the write is accepted, nothing changes, and nothing reports an error.
+//
+// Registering them makes the meta writable by the same tooling that already
+// updates announcement pages, where these keys are registered for the CPT.
+add_action( 'init', function() {
+	$keys = [
+		'rank_math_title'         => 'string',
+		'rank_math_description'   => 'string',
+		'rank_math_focus_keyword' => 'string',
+	];
+	foreach ( $keys as $key => $type ) {
+		register_post_meta( 'page', $key, [
+			'type'          => $type,
+			'single'        => true,
+			'show_in_rest'  => true,
+			'auth_callback' => function() {
+				return current_user_can( 'edit_posts' );
+			},
+		] );
+	}
+}, 20 );
