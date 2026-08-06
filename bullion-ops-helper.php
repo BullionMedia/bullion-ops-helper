@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.42
+ * Version: 0.9.43
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.42' );
+define( 'BULLION_OPS_VERSION', '0.9.43' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3225,3 +3225,46 @@ add_action( 'init', function() {
 		] );
 	}
 }, 20 );
+
+// --- v0.9.43: NewsArticle headline is the announcement, not the SEO title ---
+//
+// Rank Math builds NewsArticle.headline from the SEO title, which is written
+// to fit a search result — 52 characters ending "| ASX:QML". On announcement
+// pages that produces a headline cut mid-sentence with a ticker separator
+// glued to it:
+//
+//   schema : "MT MACKENZIE RESOURCE UPGRADE DELIVERS 32% | ASX:QML"   (52)
+//   actual : "MT MACKENZIE RESOURCE UPGRADE DELIVERS 32% INCREASE IN
+//             GOLD WITH 70% NOW IN INDICATED"                         (85)
+//
+// Google News and AI engines read the schema headline, so they were being
+// handed a sentence that stops at "32%" and a stray "| ASX:QML". The post
+// title is the announcement headline as lodged, which is what belongs here.
+//
+// Applies to asx_announcement only. On ordinary pages the SEO title is a
+// deliberate choice and should be left alone.
+add_filter( 'rank_math/json_ld', function( $data, $jsonld ) {
+	if ( ! is_array( $data ) || ! is_singular( 'asx_announcement' ) ) {
+		return $data;
+	}
+	$title = get_the_title();
+	if ( ! $title ) {
+		return $data;
+	}
+	$title = html_entity_decode( wp_strip_all_tags( $title ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+
+	foreach ( $data as $key => $node ) {
+		if ( ! is_array( $node ) || empty( $node['@type'] ) ) {
+			continue;
+		}
+		$types = (array) $node['@type'];
+		if ( in_array( 'NewsArticle', $types, true ) || in_array( 'Article', $types, true ) ) {
+			$data[ $key ]['headline'] = $title;
+			// name mirrors headline on these nodes; keep them consistent.
+			if ( isset( $data[ $key ]['name'] ) ) {
+				$data[ $key ]['name'] = $title;
+			}
+		}
+	}
+	return $data;
+}, 97, 2 );
