@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.43
+ * Version: 0.9.44
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.43' );
+define( 'BULLION_OPS_VERSION', '0.9.44' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3064,17 +3064,94 @@ function bullion_ops_decode_jsonld_entities( $value ) {
 		return $value;
 	}
 
-	// Leave URLs untouched.
+	// URLs: decode ampersand entities only. A query string that reaches a
+	// consumer as "?s=96&#038;d=mm" is a broken URL, so this does matter — but
+	// a full entity decode could corrupt a legitimately percent- or
+	// entity-encoded path, so it stays narrow.
 	if ( preg_match( '#^https?://#i', $value ) ) {
-		return $value;
+		return str_replace( [ '&amp;', '&#038;' ], '&', $value );
 	}
 
 	return html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 }
 
-add_filter( 'rank_math/json_ld', function( $data, $jsonld ) {
-	return bullion_ops_decode_jsonld_entities( $data );
-}, 99, 2 );
+// --- v0.9.44: apply the decode at OUTPUT, not via rank_math/json_ld ---------
+//
+// v0.9.39 hooked `rank_math/json_ld` at priority 99 and was architecturally
+// incapable of working. Rank Math serialises the graph in
+// includes/modules/schema/class-jsonld.php line 164:
+//
+//     wp_json_encode( wp_kses_post_deep( $json ), $options )
+//
+// `wp_kses_post_deep()` runs `wp_kses_normalize_entities()` over every string,
+// which re-encodes each bare "&" back to "&amp;" — AFTER every
+// `rank_math/json_ld` filter has run. class-jsonld.php contains no
+// `apply_filters` at all, so there is no hook downstream of it.
+//
+// Proof this was the mechanism, 7 Aug 2026: the v0.9.43 filter (priority 97)
+// writes NewsArticle.headline from `html_entity_decode( get_the_title() )`,
+// and the served page still carried "&amp;" in that exact field. We wrote a
+// decoded string and the output was encoded, so the re-encode had to be
+// downstream of the filter chain. Confirmed on an uncached fetch, so it was
+// not a stale page cache either.
+//
+// The fix buffers wp_head only, then re-encodes each application/ld+json
+// block from its parsed form. Parsing first means a block that is not valid
+// JSON is passed through untouched rather than mangled by a regex.
+//
+// Task #64 was closed on 5 Aug on the strength of the v0.9.39 filter existing,
+// without checking the served output. The SEO auditor kept reporting it and
+// was right each time.
+
+add_action( 'wp_head', 'bullion_ops_jsonld_ob_start', 0 );
+add_action( 'wp_head', 'bullion_ops_jsonld_ob_end', PHP_INT_MAX );
+
+function bullion_ops_jsonld_ob_start() {
+	ob_start( 'bullion_ops_rewrite_jsonld_entities' );
+	$GLOBALS['bullion_ops_jsonld_ob_level'] = ob_get_level();
+}
+
+function bullion_ops_jsonld_ob_end() {
+	$target = isset( $GLOBALS['bullion_ops_jsonld_ob_level'] )
+		? $GLOBALS['bullion_ops_jsonld_ob_level']
+		: null;
+
+	// Only close our own buffer, and only if it is the innermost one. If
+	// another plugin opened one inside wp_head and left it open, do nothing —
+	// PHP flushes at shutdown, so the page still renders in full and we simply
+	// skip the rewrite. Blindly unwinding the stack here could swallow another
+	// plugin's output.
+	if ( $target !== null && ob_get_level() === $target ) {
+		ob_end_flush();
+		$GLOBALS['bullion_ops_jsonld_ob_level'] = null;
+	}
+}
+
+function bullion_ops_rewrite_jsonld_entities( $html ) {
+	if ( ! is_string( $html ) || strpos( $html, 'application/ld+json' ) === false ) {
+		return $html;
+	}
+
+	$out = preg_replace_callback(
+		'#(<script[^>]*application/ld\+json[^>]*>)(.*?)(</script>)#is',
+		function ( $m ) {
+			$decoded = json_decode( $m[2], true );
+			if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $decoded ) ) {
+				return $m[0];
+			}
+			$json = wp_json_encode(
+				bullion_ops_decode_jsonld_entities( $decoded ),
+				JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+			);
+			return is_string( $json ) ? $m[1] . $json . $m[3] : $m[0];
+		},
+		$html
+	);
+
+	// preg_replace_callback returns null on backtrack-limit failure. Never
+	// return null from an output-buffer callback — it would blank the head.
+	return is_string( $out ) ? $out : $html;
+}
 
 // --- v0.9.39: enrich Rank Math's Organization node -------------------------
 //
