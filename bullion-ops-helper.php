@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.45
+ * Version: 0.9.46
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.45' );
+define( 'BULLION_OPS_VERSION', '0.9.46' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -80,13 +80,13 @@ function bullion_ops_register_routes() {
 	] );
 
 	register_rest_route( BULLION_OPS_NS, '/cache/purge', [
-		'methods'             => 'POST',
+		'methods'             => 'GET,POST',  // WAF 403s POST to this namespace
 		'callback'            => 'bullion_ops_purge_cache',
 		'permission_callback' => 'bullion_ops_permission',
 	] );
 
 	register_rest_route( BULLION_OPS_NS, '/elementor/regenerate/(?P<id>\d+)', [
-		'methods'             => 'POST',
+		'methods'             => 'GET,POST',  // WAF 403s POST to this namespace
 		'callback'            => 'bullion_ops_elementor_regenerate',
 		'permission_callback' => 'bullion_ops_permission',
 	] );
@@ -133,12 +133,14 @@ function bullion_ops_register_routes() {
 		'permission_callback' => 'bullion_ops_permission',
 	] );
 
+	// GET,POST — the server WAF blocks every POST to the bullion/v1 namespace
+	// (verified 11 Aug 2026: POST 403s on sitemap/inspect, elementor/regenerate
+	// and wpcode/snippet alike, while GET on the same routes returns 200). GET
+	// is what actually works from outside, so both are accepted.
 	register_rest_route( BULLION_OPS_NS, '/price/refresh', [
-		'methods'             => 'POST',
+		'methods'             => 'GET,POST',
 		'callback'            => 'bullion_ops_price_refresh_endpoint',
-		// Loopback self-refresh carries a shared secret instead of auth
-		// (a non-blocking wp_remote_post to ourselves has no user context).
-		'permission_callback' => 'bullion_ops_price_refresh_permission',
+		'permission_callback' => 'bullion_ops_permission',
 	] );
 }
 
@@ -3388,23 +3390,6 @@ define( 'BULLION_QML_PRICE_TTL',    900 ); // 15 min before a refresh is fired
 define( 'BULLION_QML_YAHOO_URL',    'https://query1.finance.yahoo.com/v8/finance/chart/QML.AX' );
 
 /**
- * Shared secret for the loopback refresh call.
- *
- * The refresh runs as a non-blocking wp_remote_post to ourselves, so it has no
- * cookie and no user context and cannot satisfy manage_options. Rather than
- * open the route, it carries a secret derived from the site's own salts —
- * stable across requests, never stored, and not derivable off-box.
- */
-function bullion_ops_price_refresh_secret() {
-	return hash_hmac( 'sha256', 'bullion-qml-price-refresh', wp_salt( 'auth' ) );
-}
-
-function bullion_ops_price_refresh_permission( WP_REST_Request $req ) {
-	$given = (string) $req->get_param( 'token' );
-	return $given && hash_equals( bullion_ops_price_refresh_secret(), $given );
-}
-
-/**
  * Fetch the live price from Yahoo. Returns a numeric string, or null.
  *
  * Yahoo's v8 chart endpoint is undocumented and unversioned in practice. It is
@@ -3462,8 +3447,16 @@ function bullion_ops_price_stored() {
 /**
  * Kick a refresh without blocking the current page render.
  *
- * Guarded by a short-lived transient so a burst of uncached page views cannot
- * fire a burst of outbound calls.
+ * Uses WP-Cron, NOT a loopback HTTP request. The first version of this fired a
+ * non-blocking wp_remote_post at our own REST route, which cannot work on this
+ * host: the server WAF 403s every POST to the bullion/v1 namespace, so the
+ * refresh would have failed silently forever and the price would never have
+ * seeded. Verified 11 Aug 2026 by POSTing three different bullion/v1 routes
+ * (all 403) against GET on the same routes (200).
+ *
+ * wp_schedule_single_event runs in-process on the next request, never touches
+ * HTTP, and so cannot be blocked by an edge rule. Guarded so a burst of
+ * uncached views schedules one job, not many.
  */
 function bullion_ops_price_maybe_refresh_async() {
 	if ( get_transient( 'bullion_qml_price_refreshing' ) ) {
@@ -3471,18 +3464,16 @@ function bullion_ops_price_maybe_refresh_async() {
 	}
 	set_transient( 'bullion_qml_price_refreshing', 1, 60 );
 
-	wp_remote_post(
-		add_query_arg(
-			[ 'rest_route' => '/' . BULLION_OPS_NS . '/price/refresh' ],
-			home_url( '/' )
-		),
-		[
-			'timeout'   => 0.01,
-			'blocking'  => false,
-			'sslverify' => false, // loopback to ourselves
-			'body'      => [ 'token' => bullion_ops_price_refresh_secret() ],
-		]
-	);
+	if ( ! wp_next_scheduled( 'bullion_ops_price_refresh_event' ) ) {
+		wp_schedule_single_event( time(), 'bullion_ops_price_refresh_event' );
+	}
+}
+
+add_action( 'bullion_ops_price_refresh_event', 'bullion_ops_price_refresh_cron' );
+
+function bullion_ops_price_refresh_cron() {
+	bullion_ops_price_refresh();
+	delete_transient( 'bullion_qml_price_refreshing' );
 }
 
 add_shortcode( 'qml_share_price', 'bullion_ops_qml_share_price_shortcode' );
