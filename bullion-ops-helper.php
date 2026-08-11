@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.44
+ * Version: 0.9.45
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.44' );
+define( 'BULLION_OPS_VERSION', '0.9.45' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -125,6 +125,20 @@ function bullion_ops_register_routes() {
 		'methods'             => 'GET',
 		'callback'            => 'bullion_ops_rank_math_scores',
 		'permission_callback' => 'bullion_ops_permission',
+	] );
+
+	register_rest_route( BULLION_OPS_NS, '/price', [
+		'methods'             => 'GET',
+		'callback'            => 'bullion_ops_price_status',
+		'permission_callback' => 'bullion_ops_permission',
+	] );
+
+	register_rest_route( BULLION_OPS_NS, '/price/refresh', [
+		'methods'             => 'POST',
+		'callback'            => 'bullion_ops_price_refresh_endpoint',
+		// Loopback self-refresh carries a shared secret instead of auth
+		// (a non-blocking wp_remote_post to ourselves has no user context).
+		'permission_callback' => 'bullion_ops_price_refresh_permission',
 	] );
 }
 
@@ -3345,3 +3359,210 @@ add_filter( 'rank_math/json_ld', function( $data, $jsonld ) {
 	}
 	return $data;
 }, 97, 2 );
+
+// --- v0.9.45: QML share-price strip ----------------------------------------
+//
+// Replaces the WebLink `priceframe.aspx` iframe in the pre-header strip. That
+// iframe costs ~113 KiB over ~9 requests because it carries its OWN copy of
+// everything: jQuery 1.8.2, raphael, Quote.js, svg-injector, priceImg.js and
+// its own Google Fonts Mulish — separate from the announcements iframe, which
+// loads a second jQuery and a second identical font. Measured 11 Aug 2026, PSI
+// mobile network log on the homepage.
+//
+// Modelled on the RMX Price Feed plugin, but the mechanism differs. On RMX the
+// widget called our own WordPress over admin-ajax, so that plugin intercepts
+// `wp_ajax_weblink_data` and substitutes the data. QMines' widget is an iframe
+// served from wcsecure.weblink.com.au — there is nothing on our side to
+// intercept, so we replace the widget itself.
+//
+// FAILURE MODE IS THE POINT. A listed company's own site must never render its
+// share price as "$0.000". So:
+//   - the stored value is the source of truth for rendering, never a live call
+//   - a page render NEVER waits on Yahoo (stale-while-revalidate)
+//   - when Yahoo is unreachable the last known price keeps serving indefinitely
+//   - before any price has ever been stored the shortcode renders NOTHING,
+//     so a fresh install degrades to an empty strip rather than a wrong number
+
+define( 'BULLION_QML_PRICE_OPTION', 'bullion_qml_share_price' );
+define( 'BULLION_QML_PRICE_TTL',    900 ); // 15 min before a refresh is fired
+define( 'BULLION_QML_YAHOO_URL',    'https://query1.finance.yahoo.com/v8/finance/chart/QML.AX' );
+
+/**
+ * Shared secret for the loopback refresh call.
+ *
+ * The refresh runs as a non-blocking wp_remote_post to ourselves, so it has no
+ * cookie and no user context and cannot satisfy manage_options. Rather than
+ * open the route, it carries a secret derived from the site's own salts —
+ * stable across requests, never stored, and not derivable off-box.
+ */
+function bullion_ops_price_refresh_secret() {
+	return hash_hmac( 'sha256', 'bullion-qml-price-refresh', wp_salt( 'auth' ) );
+}
+
+function bullion_ops_price_refresh_permission( WP_REST_Request $req ) {
+	$given = (string) $req->get_param( 'token' );
+	return $given && hash_equals( bullion_ops_price_refresh_secret(), $given );
+}
+
+/**
+ * Fetch the live price from Yahoo. Returns a numeric string, or null.
+ *
+ * Yahoo's v8 chart endpoint is undocumented and unversioned in practice. It is
+ * treated as untrusted: any non-200, any WP_Error, any non-numeric payload and
+ * any implausible value returns null, which leaves the stored price untouched.
+ */
+function bullion_ops_price_fetch() {
+	$response = wp_remote_get( BULLION_QML_YAHOO_URL, [
+		'timeout'    => 8,
+		'user-agent' => 'Mozilla/5.0 (compatible; BullionOpsHelper/1.0)',
+		'sslverify'  => true,
+	] );
+
+	if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+		return null;
+	}
+
+	$body  = json_decode( wp_remote_retrieve_body( $response ), true );
+	$price = $body['chart']['result'][0]['meta']['regularMarketPrice'] ?? null;
+
+	if ( null === $price || ! is_numeric( $price ) ) {
+		return null;
+	}
+	// Sanity band. QML is a sub-dollar stock; a value outside this range means
+	// the endpoint changed shape or returned a different instrument, and a
+	// wrong price is worse than a stale one.
+	$price = (float) $price;
+	if ( $price <= 0 || $price > 100 ) {
+		return null;
+	}
+
+	return number_format( $price, 3, '.', '' );
+}
+
+/** Fetch and store. Returns the stored record, or null if the fetch failed. */
+function bullion_ops_price_refresh() {
+	$price = bullion_ops_price_fetch();
+	if ( null === $price ) {
+		return null;
+	}
+	$record = [ 'price' => $price, 'fetched_at' => time() ];
+	update_option( BULLION_QML_PRICE_OPTION, $record, true );
+	return $record;
+}
+
+/** Read the stored record without ever calling out. */
+function bullion_ops_price_stored() {
+	$record = get_option( BULLION_QML_PRICE_OPTION );
+	if ( ! is_array( $record ) || empty( $record['price'] ) ) {
+		return null;
+	}
+	return $record;
+}
+
+/**
+ * Kick a refresh without blocking the current page render.
+ *
+ * Guarded by a short-lived transient so a burst of uncached page views cannot
+ * fire a burst of outbound calls.
+ */
+function bullion_ops_price_maybe_refresh_async() {
+	if ( get_transient( 'bullion_qml_price_refreshing' ) ) {
+		return;
+	}
+	set_transient( 'bullion_qml_price_refreshing', 1, 60 );
+
+	wp_remote_post(
+		add_query_arg(
+			[ 'rest_route' => '/' . BULLION_OPS_NS . '/price/refresh' ],
+			home_url( '/' )
+		),
+		[
+			'timeout'   => 0.01,
+			'blocking'  => false,
+			'sslverify' => false, // loopback to ourselves
+			'body'      => [ 'token' => bullion_ops_price_refresh_secret() ],
+		]
+	);
+}
+
+add_shortcode( 'qml_share_price', 'bullion_ops_qml_share_price_shortcode' );
+
+function bullion_ops_qml_share_price_shortcode( $atts = [] ) {
+	$atts = shortcode_atts( [
+		'ticker'   => 'ASX:QML',
+		'decimals' => 3,
+		'link'     => '', // e.g. "/investors/" to make the strip clickable
+	], $atts, 'qml_share_price' );
+
+	$record = bullion_ops_price_stored();
+
+	// Never seen a price: render nothing rather than a zero.
+	if ( null === $record ) {
+		bullion_ops_price_maybe_refresh_async();
+		return '';
+	}
+
+	if ( ( time() - (int) $record['fetched_at'] ) > BULLION_QML_PRICE_TTL ) {
+		// Serve the stale value NOW and refresh behind the request.
+		bullion_ops_price_maybe_refresh_async();
+	}
+
+	$decimals = max( 0, min( 4, (int) $atts['decimals'] ) );
+	$text     = sprintf(
+		'%s $%s',
+		$atts['ticker'],
+		number_format( (float) $record['price'], $decimals, '.', '' )
+	);
+
+	// font-family:inherit so the strip picks up Muli from the theme rather than
+	// shipping a font of its own — the whole point of dropping the iframe.
+	$style = 'font-family:inherit;color:#fff;font-weight:600;text-align:center;'
+		. 'line-height:1.4;letter-spacing:.01em;margin:0;';
+
+	if ( $atts['link'] ) {
+		return sprintf(
+			'<div class="qml-price-strip" style="%s"><a href="%s" style="color:#fff;text-decoration:none;">%s</a></div>',
+			esc_attr( $style ),
+			esc_url( $atts['link'] ),
+			esc_html( $text )
+		);
+	}
+
+	return sprintf(
+		'<div class="qml-price-strip" style="%s">%s</div>',
+		esc_attr( $style ),
+		esc_html( $text )
+	);
+}
+
+// --- REST: read + refresh --------------------------------------------------
+
+function bullion_ops_price_status() {
+	$record = bullion_ops_price_stored();
+	if ( null === $record ) {
+		return [ 'stored' => false, 'price' => null, 'age_seconds' => null, 'ttl' => BULLION_QML_PRICE_TTL ];
+	}
+	$age = time() - (int) $record['fetched_at'];
+	return [
+		'stored'      => true,
+		'price'       => $record['price'],
+		'fetched_at'  => gmdate( 'c', (int) $record['fetched_at'] ),
+		'age_seconds' => $age,
+		'is_stale'    => $age > BULLION_QML_PRICE_TTL,
+		'ttl'         => BULLION_QML_PRICE_TTL,
+		'rendered'    => sprintf( 'ASX:QML $%s', $record['price'] ),
+	];
+}
+
+function bullion_ops_price_refresh_endpoint() {
+	$record = bullion_ops_price_refresh();
+	delete_transient( 'bullion_qml_price_refreshing' );
+	if ( null === $record ) {
+		return new WP_Error(
+			'bullion_price_unavailable',
+			'Upstream price fetch failed; stored value left untouched.',
+			[ 'status' => 502 ]
+		);
+	}
+	return [ 'ok' => true, 'price' => $record['price'], 'fetched_at' => gmdate( 'c', $record['fetched_at'] ) ];
+}
