@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.50
+ * Version: 0.9.51
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.50' );
+define( 'BULLION_OPS_VERSION', '0.9.51' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3555,10 +3555,22 @@ function bullion_ops_qml_share_price_shortcode( $atts = [] ) {
 		number_format( (float) $record['price'], $decimals, '.', '' )
 	);
 
-	// font-family:inherit so the strip picks up Muli from the theme rather than
-	// shipping a font of its own — the whole point of dropping the iframe.
-	$style = 'font-family:inherit;color:#fff;font-weight:600;text-align:center;'
-		. 'line-height:1.4;letter-spacing:.01em;margin:0;';
+	// Font is named explicitly, NOT inherited. v0.9.45 used font-family:inherit
+	// on the theory that the strip would pick up Muli from the theme. It only
+	// worked on the homepage: that page loads a stylesheet carrying
+	// `body{font-family:Muli,sans-serif}` which no other page loads, so
+	// everywhere else the strip inherited the browser default stack
+	// (-apple-system/Segoe UI/Roboto) and rendered in the wrong face.
+	// Reported by the operator 2026-08-12; verified by diffing the CSS on
+	// / against /mt-chalmers/. Muli is already loaded by the theme, so naming
+	// it costs no extra request — the point of dropping the iframe was to stop
+	// shipping a SECOND font, not to avoid naming the one we have.
+	//
+	// padding-bottom nudges the text off the strip's bottom edge; the cap
+	// height sits high in the line box, so equal padding reads as too high.
+	$style = 'font-family:"Muli",sans-serif;color:#fff;font-weight:600;'
+		. 'text-align:center;line-height:1.4;letter-spacing:.01em;'
+		. 'margin:0;padding:0 0 3px;';
 
 	if ( $atts['link'] ) {
 		return sprintf(
