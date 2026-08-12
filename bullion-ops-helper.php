@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.49
+ * Version: 0.9.50
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.49' );
+define( 'BULLION_OPS_VERSION', '0.9.50' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1655,11 +1655,23 @@ function bullion_ops_refresh_title_panel_meta( $content ) {
 // present (class="bullion-ops-toc").
 
 function bullion_ops_get_toc_enrolled_slugs() {
-	return [
-		'is-copper-a-good-investment',                    // Pillar
-		'asx-copper-stocks',                              // Cluster
+	// Every pillar / cluster article gets a TOC, and that set is already
+	// defined once by bullion_ops_get_pillar_hero_slugs(). Deriving from it
+	// means a new article is enrolled by the same act that gives it its hero
+	// and its insights card, rather than needing a second list nobody
+	// remembers. The 4-H2 minimum / 40-H2 maximum guards downstream still
+	// decide whether a TOC actually renders, so a short page opts itself out.
+	//
+	// Merged here rather than at the two call sites (toc_should_run and
+	// toc_is_enrolled_context) so the two can never drift apart.
+	//
+	// v0.9.50, 2026-08-12 — copper-mining-queensland shipped with 11 H2s and
+	// no TOC purely because it was absent from the hardcoded list this
+	// replaces. Fourth per-page list to bite us the same way in one day.
+	$extra = [
 		'qmines-rapidly-advances-fully-funded-dfs-delivery', // ASX announcement — 28 H2s, TOC-worthy per seo-auditor 2026-07-22
 	];
+	return array_values( array_unique( array_merge( bullion_ops_get_pillar_hero_slugs(), $extra ) ) );
 }
 
 function bullion_ops_slugify_heading( $text ) {
