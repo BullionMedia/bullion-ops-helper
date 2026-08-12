@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.53
+ * Version: 0.9.54
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.53' );
+define( 'BULLION_OPS_VERSION', '0.9.54' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3663,7 +3663,7 @@ function bullion_ops_qml_share_price_shortcode( $atts = [] ) {
 	// height sits high in the line box, so equal padding reads as too high.
 	$style = 'font-family:"Muli",sans-serif;font-size:15px;color:#fff;font-weight:600;'
 		. 'text-align:center;line-height:1.4;letter-spacing:.01em;'
-		. 'margin:0;padding:0 0 3px;';
+		. 'margin:0;padding:0 0 6px;';
 
 	if ( $atts['link'] ) {
 		return sprintf(
