@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.48
+ * Version: 0.9.49
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.48' );
+define( 'BULLION_OPS_VERSION', '0.9.49' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2474,7 +2474,7 @@ function bullion_ops_render_insights_grid( $atts ) {
 		// long-form definitive coverage; "Guide" signals a focused, more
 		// scoped piece. Reasoning captured 2026-07-22.
 		$tag      = ( 0 === (int) $post_obj->post_parent ) ? 'Deep Dive' : 'Guide';
-		$visual   = bullion_ops_get_insights_visual_text( $post_obj->post_name );
+		$visual   = bullion_ops_get_insights_visual_text( $post_obj->post_name, $title );
 
 		$thumb_html = has_post_thumbnail( $id )
 			? get_the_post_thumbnail( $id, 'medium_large', [ 'loading' => 'lazy', 'decoding' => 'async' ] )
@@ -2519,15 +2519,35 @@ function bullion_ops_render_insights_grid( $atts ) {
 	return $cards;
 }
 
-// Slug-based overlay-text map for the .qm-insights-card-visual-text label
-// that hovers over the card thumbnail. Extend as new pillars / clusters
-// ship. Empty string means the card renders without an overlay.
-function bullion_ops_get_insights_visual_text( $slug ) {
+// Overlay-text label for .qm-insights-card-visual-text, hovering over the
+// card thumbnail. The map is an OVERRIDE list only — it exists for the two
+// legacy pages whose label deliberately differs from their title.
+//
+// Everything else derives from the title automatically: the part before the
+// colon, which is how these titles are already written ("Copper Mining in
+// Queensland: The Investment Case" -> "Copper Mining in Queensland"). Adding
+// a page to the map is now optional, not a required publish step.
+//
+// v0.9.49, 2026-08-12. Before this, the map was the ONLY source, so
+// copper-mining-queensland shipped with a blank overlay and nobody noticed
+// until the card was eyeballed. Same class of defect as the hero-slug and
+// FAQ-slug lists: a hardcoded per-page list that a new page silently misses.
+function bullion_ops_get_insights_visual_text( $slug, $title = '' ) {
 	$map = [
 		'is-copper-a-good-investment' => 'Why Copper',
-		'asx-copper-stocks'            => 'ASX Copper Stocks',
+		'asx-copper-stocks'           => 'ASX Copper Stocks',
 	];
-	return isset( $map[ $slug ] ) ? $map[ $slug ] : '';
+	if ( isset( $map[ $slug ] ) ) {
+		return $map[ $slug ];
+	}
+	$title = trim( wp_strip_all_tags( (string) $title ) );
+	if ( '' === $title ) {
+		return '';
+	}
+	$lead = trim( explode( ':', $title, 2 )[0] );
+	// A lead that long would wrap badly over the thumbnail — better no
+	// overlay than a broken one.
+	return ( '' !== $lead && strlen( $lead ) <= 40 ) ? $lead : '';
 }
 
 // --- ASX announcement page-enhancement scripts (v0.9.23) -------------------
