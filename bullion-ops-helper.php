@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.47
+ * Version: 0.9.48
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.47' );
+define( 'BULLION_OPS_VERSION', '0.9.48' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1454,6 +1454,7 @@ function bullion_ops_get_pillar_hero_slugs() {
 		'is-copper-a-good-investment',
 		// Cluster posts
 		'asx-copper-stocks',
+		'copper-mining-queensland',
 	];
 }
 
