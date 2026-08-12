@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.46
+ * Version: 0.9.47
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.46' );
+define( 'BULLION_OPS_VERSION', '0.9.47' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1194,6 +1194,23 @@ function bullion_ops_get_project_faq_data() {
 				[ 'q' => 'What approvals and studies has Mt Mackenzie completed?', 'a' => 'Mt Mackenzie holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land. The project is currently undergoing further PFS-level work.' ],
 				[ 'q' => 'When did QMines acquire Mt Mackenzie?',               'a' => 'QMines acquired Mt Mackenzie from Resources and Energy Group in mid-2025.' ],
 				[ 'q' => 'How has the Mt Mackenzie resource grown since QMines acquired the project?', 'a' => 'Since acquiring the project, QMines has increased the Resource by 32% in contained gold and 30% in contained silver. The Resource now stands at 5.2Mt at 1.01g/t gold and 6.7g/t silver for 170,000 ounces of gold and 1.12 million ounces of silver, with approximately 70% of contained gold classified as Indicated.' ],
+			],
+		],
+		// Cluster post under the /is-copper-a-good-investment/ pillar. FAQPage
+		// schema matches the 7 visible Q/A pairs in the page body verbatim —
+		// AI Overview is active on "copper mining queensland", so the Q/A
+		// wording is the AEO play and must not be paraphrased here.
+		// Added v0.9.47 — 2026-08-12.
+		'copper-mining-queensland' => [
+			'in_summary' => '',
+			'faqs' => [
+				[ 'q' => 'Is Queensland a good copper mining location?', 'a' => 'Yes, Queensland consistently ranks among Australia\'s top copper mining states. The state holds some of the world\'s best-known polymetallic mineral systems, anchored by the Mt Isa Inlier\'s century-plus mining history, alongside a developing cohort of copper-gold projects in Central Queensland. A stable regulatory framework, established road and rail infrastructure, and active Queensland Government support for critical minerals development make it one of the lower-risk copper jurisdictions globally for investors evaluating ASX exposure.' ],
+				[ 'q' => 'What copper mines are in Queensland?', 'a' => 'Queensland\'s copper mining today centres on the Eloise mine (AIC Mines) in the northwest, which has met production guidance for three consecutive years. Mount Isa\'s underground copper mines closed in mid-2025 after more than 60 years, though Glencore\'s smelter there continues to process copper concentrate, now sourced entirely from third parties. The Capricorn Copper mine near Cloncurry has been offline since March 2024, with 29Metals working through the regulatory approvals needed for a restart. In the development pipeline, QMines (ASX:QML) is advancing the Mt Chalmers copper-gold project near Rockhampton through a fully-funded Definitive Feasibility Study, supported by a $15M investment from Queensland Investment Corporation.' ],
+				[ 'q' => 'Which ASX companies mine copper in Queensland?', 'a' => 'Several ASX-listed companies have Queensland copper exposure. Aeris Resources (ASX:AIS) operates the North Queensland Copper Operations. QMines (ASX:QML) is advancing the Mt Chalmers copper-gold project (DFS stage) and the Develin Creek copper project (exploration stage), both in Central Queensland. True North Copper (ASX:TNC) operates in the Cloncurry region. The stage of each project differs significantly, from producing mines to DFS-stage developers to earlier explorers.' ],
+				[ 'q' => 'What is QIC\'s investment in QMines copper?', 'a' => 'In April 2026, Queensland Investment Corporation (QIC) invested $15 million into QMines (ASX:QML) to fast-track the Mt Chalmers copper-gold project through its Definitive Feasibility Study. QIC is the Queensland Government\'s investment arm, with a mandate that includes backing critical mineral projects that support Queensland\'s economic development. The QIC investment was publicly announced on the ASX and is part of QMines\' fully-funded DFS program.' ],
+				[ 'q' => 'How does copper mining in Queensland compare to other Australian states?', 'a' => 'Queensland stands alongside South Australia and Western Australia as one of Australia\'s three major copper-producing states. Queensland\'s advantage for investors is the combination of geological diversity (both high-grade polymetallic deposits in the northwest and copper-gold volcanic-hosted systems in Central Queensland), existing port infrastructure (Townsville, Rockhampton), and active state government investment in critical minerals. Western Australia dominates ASX copper by company count; Queensland offers a smaller but more concentrated cohort of projects.' ],
+				[ 'q' => 'Is Mt Chalmers the only copper project near Rockhampton?', 'a' => 'Mt Chalmers is currently the most advanced copper-gold development project in the Central Queensland region. QMines also holds the Develin Creek copper project at an earlier exploration stage in the same corridor. The broader Central Queensland volcanic-hosted massive sulphide (VHMS) belt hosts several known copper-gold occurrences, and QMines\' work at Mt Chalmers is establishing the geological framework for the region\'s development potential.' ],
+				[ 'q' => 'Can Australian retail investors buy Queensland copper stocks on the ASX?', 'a' => 'Yes. ASX-listed companies with Queensland copper projects can be bought and sold through any standard Australian brokerage account. This includes companies at different stages: producers (generating revenue from existing operations), developers (advancing projects through feasibility and permitting), and explorers (drilling to define resources). Each stage carries different risk and return profiles. This content is for information only and does not constitute financial advice.' ],
 			],
 		],
 		// Google Ads landing page — dual-purpose investor/discovery page.
