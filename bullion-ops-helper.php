@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.52
+ * Version: 0.9.53
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.52' );
+define( 'BULLION_OPS_VERSION', '0.9.53' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1159,7 +1159,7 @@ function bullion_ops_render_project_faq_jsonld( $page ) {
 }
 
 function bullion_ops_get_project_faq_data() {
-	return [
+	$map = [
 		'mt-chalmers' => [
 			'in_summary' => 'Mt Chalmers is QMines\' flagship development project, a high-grade copper-gold deposit 17km from Rockhampton with a completed Pre-Feasibility Study, five resource upgrades in under three years, and a current JORC resource of 11.86Mt at 1.22% copper equivalent. The project\'s shallow open-pit geometry, proximity to established infrastructure, and 316km² of tenure underpin QMines\' strategy of transitioning Mt Chalmers toward production. With 84% of resources in the Measured and Indicated JORC categories, Mt Chalmers represents the company\'s most advanced asset and its primary value-creation pathway.',
 			'faqs' => [
@@ -1230,6 +1230,30 @@ function bullion_ops_get_project_faq_data() {
 			],
 		],
 	];
+
+	// Q/A pairs written at publish time by publish_article.py, harvested from
+	// the article's own .asx-article-faq block — so the schema and the visible
+	// FAQ can never disagree, and a new article needs no plugin release.
+	// This is the durable half of task #46; the remaining half is emitting for
+	// pages nobody publishes through the script.
+	foreach ( bullion_ops_article_option( BULLION_OPS_FAQ_OPTION ) as $slug => $entry ) {
+		$pairs = [];
+		foreach ( (array) ( $entry['faqs'] ?? [] ) as $qa ) {
+			if ( ! empty( $qa['q'] ) && ! empty( $qa['a'] ) ) {
+				$pairs[] = [
+					'q' => wp_strip_all_tags( $qa['q'] ),
+					'a' => wp_strip_all_tags( $qa['a'] ),
+				];
+			}
+		}
+		if ( $pairs ) {
+			$map[ sanitize_title( $slug ) ] = [
+				'in_summary' => wp_strip_all_tags( (string) ( $entry['in_summary'] ?? '' ) ),
+				'faqs'       => $pairs,
+			];
+		}
+	}
+	return $map;
 }
 
 // --- Pillar page BreadcrumbList JSON-LD ------------------------------------
@@ -1290,7 +1314,7 @@ function bullion_ops_inject_pillar_breadcrumbs() {
 
 function bullion_ops_get_pillar_breadcrumbs() {
 	$home = trailingslashit( home_url() );
-	return [
+	$map  = [
 		// Pillar: Is Copper a Good Investment?
 		// Root-level page (parent=0) — 2-step trail: Home → page.
 		// Added 2026-06-10 to fill the BreadcrumbList gap Rank Math leaves on
@@ -1325,6 +1349,28 @@ function bullion_ops_get_pillar_breadcrumbs() {
 			],
 		],
 	];
+
+	// Trails written at publish time by publish_article.py. Stored as
+	// slug => [ [name, url], ... ]; a malformed entry is skipped rather than
+	// emitted, because a broken BreadcrumbList is worse than none.
+	foreach ( bullion_ops_article_option( BULLION_OPS_BREADCRUMBS_OPTION ) as $slug => $trail ) {
+		if ( ! is_array( $trail ) || count( $trail ) < 2 ) {
+			continue;
+		}
+		$clean = [];
+		foreach ( $trail as $step ) {
+			if ( ! empty( $step['name'] ) && ! empty( $step['url'] ) ) {
+				$clean[] = [
+					'name' => sanitize_text_field( $step['name'] ),
+					'url'  => esc_url_raw( $step['url'] ),
+				];
+			}
+		}
+		if ( count( $clean ) >= 2 ) {
+			$map[ sanitize_title( $slug ) ] = $clean;
+		}
+	}
+	return $map;
 }
 
 // --- Pillar hero image + floating title panel ------------------------------
@@ -1448,14 +1494,61 @@ function bullion_ops_inject_pillar_hero_css() {
 	<?php
 }
 
+// --- Article registry, editable over REST (v0.9.53) ------------------------
+//
+// Enrolling a new article used to mean editing this file, tagging a release,
+// and the operator updating the plugin on two sites — for a data change, not a
+// code change. Now the three per-article registries live in options exposed
+// through wp/v2/settings, so publish_article.py writes them at publish time
+// and no plugin release is involved.
+//
+// The hardcoded arrays below stay as the floor. Options are merged on top, so
+// nothing that already works can be switched off by an empty or broken option.
+//
+// wp/v2/settings is used deliberately rather than a bullion/v1 route: the
+// server WAF blocks ALL POST to the bullion/v1 namespace (verified across
+// three unrelated routes), while core wp/v2 POST works.
+
+define( 'BULLION_OPS_ARTICLES_OPTION',    'bullion_ops_article_slugs' );
+define( 'BULLION_OPS_BREADCRUMBS_OPTION', 'bullion_ops_article_breadcrumbs' );
+define( 'BULLION_OPS_FAQ_OPTION',         'bullion_ops_article_faqs' );
+
+function bullion_ops_register_article_settings() {
+	$shapes = [
+		BULLION_OPS_ARTICLES_OPTION    => [ 'type' => 'array', 'default' => [] ],
+		BULLION_OPS_BREADCRUMBS_OPTION => [ 'type' => 'object', 'default' => [] ],
+		BULLION_OPS_FAQ_OPTION         => [ 'type' => 'object', 'default' => [] ],
+	];
+	foreach ( $shapes as $name => $shape ) {
+		register_setting( 'options', $name, [
+			'type'         => $shape['type'],
+			'default'      => $shape['default'],
+			'show_in_rest' => [
+				'schema' => 'array' === $shape['type']
+					? [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ]
+					: [ 'type' => 'object', 'additionalProperties' => true ],
+			],
+		] );
+	}
+}
+add_action( 'init', 'bullion_ops_register_article_settings' );
+
+function bullion_ops_article_option( $name ) {
+	$value = get_option( $name, [] );
+	return is_array( $value ) ? $value : [];
+}
+
 function bullion_ops_get_pillar_hero_slugs() {
-	return [
+	$builtin = [
 		// Pillar
 		'is-copper-a-good-investment',
 		// Cluster posts
 		'asx-copper-stocks',
 		'copper-mining-queensland',
 	];
+	$extra = array_filter( array_map( 'sanitize_title',
+		bullion_ops_article_option( BULLION_OPS_ARTICLES_OPTION ) ) );
+	return array_values( array_unique( array_merge( $builtin, $extra ) ) );
 }
 
 // --- Pillar / cluster header auto-wrap (v0.9.11) ---------------------------
