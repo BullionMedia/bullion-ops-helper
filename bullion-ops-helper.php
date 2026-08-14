@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.55
+ * Version: 0.9.56
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.55' );
+define( 'BULLION_OPS_VERSION', '0.9.56' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3285,6 +3285,38 @@ function bullion_ops_jsonld_ob_end() {
 		$GLOBALS['bullion_ops_jsonld_ob_level'] = null;
 	}
 }
+
+// --- /projects/ tile images fill their box (v0.9.56) -----------------------
+//
+// The three project tiles sit in an Essential Addons filterable gallery whose
+// thumbnail box is fixed at 400px tall, in a column ~415px wide. The source
+// photos are 3:2, 3:2 and 5:4, so every one of them under-filled that box and
+// left white space beneath, and the 5:4 one sat lower than the other two.
+// object-fit:cover crops to the box at any viewport, so the row stays correct
+// whatever shape a replacement photo arrives in.
+//
+// This lives in the plugin rather than the page's Elementor custom CSS for a
+// specific reason, found the hard way on 14 Aug 2026: writing the rule into
+// `_elementor_page_settings.custom_css` worked and rendered, and was then
+// silently wiped when `bullion/v1/elementor/regenerate` ran — that route calls
+// document_save, which re-serialises page settings and drops keys it did not
+// write. The rule reappeared as missing with no error anywhere. Page-level
+// custom CSS on this site is not durable; the plugin is. See §I trap 29.
+
+function bullion_ops_project_tiles_css() {
+	if ( ! is_page( 'projects' ) ) {
+		return;
+	}
+	$sel = '.eael-filterable-gallery-item-wrap';
+	echo "\n<style id=\"bullion-ops-project-tiles\">"
+		. "{$sel} .gallery-item-thumbnail-wrap,"
+		. "{$sel} .eael-grid-fg-box .eael-grid-fg-img{overflow:hidden;}"
+		. "{$sel} .gallery-item-thumbnail-wrap img,"
+		. "{$sel} .eael-grid-fg-box .eael-grid-fg-img img{"
+		. "width:100%;height:100%;object-fit:cover;object-position:center;display:block;}"
+		. "</style>\n";
+}
+add_action( 'wp_head', 'bullion_ops_project_tiles_css', 110 );
 
 // --- Duplicate <h1> on pillar / cluster pages (v0.9.55) --------------------
 //
