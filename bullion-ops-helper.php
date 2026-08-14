@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.54
+ * Version: 0.9.55
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.54' );
+define( 'BULLION_OPS_VERSION', '0.9.55' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3284,6 +3284,58 @@ function bullion_ops_jsonld_ob_end() {
 		ob_end_flush();
 		$GLOBALS['bullion_ops_jsonld_ob_level'] = null;
 	}
+}
+
+// --- Duplicate <h1> on pillar / cluster pages (v0.9.55) --------------------
+//
+// Every article page shipped TWO h1 elements: Hello Elementor's
+// <h1 class="entry-title"> inside .page-header, and the article template's own
+// <h1> inside .asx-article-header, with identical text. Only one renders —
+// the plugin's hero CSS carries `.page-header .entry-title{display:none}` — but
+// both are in the served HTML, which is what a crawler parses.
+//
+// The obvious fix does not work. Hello Elementor exposes
+// `hello_elementor_page_title`, but the filter wraps the whole
+// `<div class="page-header">` (template-parts/single.php, filter on line 17,
+// div on line 18), and that div IS the hero image band: the plugin's
+// bullion-ops-pillar-hero-css styles `.page-header` and `.page-header::before`
+// to paint the full-width image and its gradient. Returning false would remove
+// the heading AND the hero.
+//
+// So demote rather than remove: the hidden theme heading becomes a <p>, the
+// visible article heading stays the page's only <h1>. `.entry-title` styling
+// is unaffected because every rule keys off the class, not the tag.
+//
+// Deliberately narrow: enrolled article slugs only, one substitution, and the
+// buffer returns the page untouched if the pattern does not match exactly once.
+// Reported by qmines-seo-auditor 14 Aug 2026 across all three article pages.
+
+function bullion_ops_demote_theme_h1_start() {
+	if ( is_admin() || ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_pillar_hero_slugs(), true ) ) {
+		return;
+	}
+	ob_start( 'bullion_ops_demote_theme_h1' );
+}
+add_action( 'template_redirect', 'bullion_ops_demote_theme_h1_start', 1 );
+
+function bullion_ops_demote_theme_h1( $html ) {
+	if ( ! is_string( $html ) || '' === $html ) {
+		return $html;
+	}
+	$pattern = '#<h1([^>]*\bclass="[^"]*\bentry-title\b[^"]*"[^>]*)>(.*?)</h1>#is';
+	$count   = preg_match_all( $pattern, $html, $m );
+	// Exactly one, or leave the page alone. Zero means the theme changed;
+	// more than one means something unexpected is on the page, and silently
+	// rewriting several headings is worse than shipping the duplicate.
+	if ( 1 !== $count ) {
+		return $html;
+	}
+	$out = preg_replace( $pattern, '<p$1>$2</p>', $html, 1 );
+	return ( null === $out ) ? $html : $out;
 }
 
 function bullion_ops_rewrite_jsonld_entities( $html ) {
