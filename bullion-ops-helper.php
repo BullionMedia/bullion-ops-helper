@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.56
+ * Version: 0.9.57
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.56' );
+define( 'BULLION_OPS_VERSION', '0.9.57' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -582,13 +582,43 @@ function bullion_ops_wpcode_search_replace( WP_REST_Request $req ) {
 		return new WP_Error( 'bullion_ops_no_match', 'search string not found in snippet content', [ 'status' => 404 ] );
 	}
 
+	// wp_update_post() expects SLASHED data and calls wp_unslash() on what it
+	// is given. Passing raw content therefore strips one level of backslashes.
+	//
+	// On 2026-08-20 this silently turned PHP source `. "\\n";` into
+	// `. "n";` in the QMines hero-preload snippet. The result was valid PHP,
+	// so it saved cleanly, reported success, and echoed a literal "n" into
+	// wp_head on the live homepage. The operator found it visually. Two admin
+	// Update clicks were spent on a fault the endpoint created.
+	//
+	// wp_slash() is the fix, not a guard against backslashes: the endpoint
+	// should handle them correctly rather than refuse them.
 	$result = wp_update_post( [
 		'ID'           => $id,
-		'post_content' => $after,
+		'post_content' => wp_slash( $after ),
 	], true );
 
 	if ( is_wp_error( $result ) ) {
 		return $result;
+	}
+
+	// Read back and compare byte for byte. A save that silently altered the
+	// content is the failure mode this endpoint has already shipped once, so
+	// success is asserted rather than assumed. Revert on mismatch: leaving
+	// corrupted PHP in a snippet is worse than the edit not happening.
+	clean_post_cache( $id );
+	$stored = get_post_field( 'post_content', $id, 'raw' );
+	if ( $stored !== $after ) {
+		wp_update_post( [ 'ID' => $id, 'post_content' => wp_slash( $before ) ], true );
+		return new WP_Error(
+			'bullion_ops_write_mismatch',
+			sprintf(
+				'Write altered the content (expected %d bytes, stored %d). Snippet reverted, nothing changed.',
+				strlen( $after ),
+				strlen( $stored )
+			),
+			[ 'status' => 500 ]
+		);
 	}
 
 	$flushed = function_exists( 'bullion_ops_flush_wpcode_cache' )
@@ -596,12 +626,17 @@ function bullion_ops_wpcode_search_replace( WP_REST_Request $req ) {
 		: [];
 
 	return [
-		'ok'            => true,
-		'snippet_id'    => $id,
-		'replacements'  => $count,
-		'before_length' => strlen( $before ),
-		'after_length'  => strlen( $after ),
-		'cache_flushed' => $flushed,
+		'ok'                => true,
+		'snippet_id'        => $id,
+		'replacements'      => $count,
+		'before_length'     => strlen( $before ),
+		'after_length'      => strlen( $after ),
+		'backslashes'       => [
+			'before' => substr_count( $before, '\\' ),
+			'after'  => substr_count( $stored, '\\' ),
+		],
+		'write_verified'    => true,
+		'cache_flushed'     => $flushed,
 	];
 }
 
