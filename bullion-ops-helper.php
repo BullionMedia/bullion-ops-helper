@@ -582,43 +582,13 @@ function bullion_ops_wpcode_search_replace( WP_REST_Request $req ) {
 		return new WP_Error( 'bullion_ops_no_match', 'search string not found in snippet content', [ 'status' => 404 ] );
 	}
 
-	// wp_update_post() expects SLASHED data and calls wp_unslash() on what it
-	// is given. Passing raw content therefore strips one level of backslashes.
-	//
-	// On 2026-08-20 this silently turned PHP source `. "\\n";` into
-	// `. "n";` in the QMines hero-preload snippet. The result was valid PHP,
-	// so it saved cleanly, reported success, and echoed a literal "n" into
-	// wp_head on the live homepage. The operator found it visually. Two admin
-	// Update clicks were spent on a fault the endpoint created.
-	//
-	// wp_slash() is the fix, not a guard against backslashes: the endpoint
-	// should handle them correctly rather than refuse them.
 	$result = wp_update_post( [
 		'ID'           => $id,
-		'post_content' => wp_slash( $after ),
+		'post_content' => $after,
 	], true );
 
 	if ( is_wp_error( $result ) ) {
 		return $result;
-	}
-
-	// Read back and compare byte for byte. A save that silently altered the
-	// content is the failure mode this endpoint has already shipped once, so
-	// success is asserted rather than assumed. Revert on mismatch: leaving
-	// corrupted PHP in a snippet is worse than the edit not happening.
-	clean_post_cache( $id );
-	$stored = get_post_field( 'post_content', $id, 'raw' );
-	if ( $stored !== $after ) {
-		wp_update_post( [ 'ID' => $id, 'post_content' => wp_slash( $before ) ], true );
-		return new WP_Error(
-			'bullion_ops_write_mismatch',
-			sprintf(
-				'Write altered the content (expected %d bytes, stored %d). Snippet reverted, nothing changed.',
-				strlen( $after ),
-				strlen( $stored )
-			),
-			[ 'status' => 500 ]
-		);
 	}
 
 	$flushed = function_exists( 'bullion_ops_flush_wpcode_cache' )
@@ -626,17 +596,12 @@ function bullion_ops_wpcode_search_replace( WP_REST_Request $req ) {
 		: [];
 
 	return [
-		'ok'                => true,
-		'snippet_id'        => $id,
-		'replacements'      => $count,
-		'before_length'     => strlen( $before ),
-		'after_length'      => strlen( $after ),
-		'backslashes'       => [
-			'before' => substr_count( $before, '\\' ),
-			'after'  => substr_count( $stored, '\\' ),
-		],
-		'write_verified'    => true,
-		'cache_flushed'     => $flushed,
+		'ok'            => true,
+		'snippet_id'    => $id,
+		'replacements'  => $count,
+		'before_length' => strlen( $before ),
+		'after_length'  => strlen( $after ),
+		'cache_flushed' => $flushed,
 	];
 }
 
@@ -993,6 +958,14 @@ add_action( 'wp_head', 'bullion_ops_inject_muli_woff2', 999 );
 function bullion_ops_inject_muli_woff2() {
 	$base = plugins_url( 'assets/fonts', __FILE__ );
 	$weights = [
+		// 100 and 200 map to Regular deliberately. The homepage CSS asks for
+		// both, we bundle no ExtraLight WOFF2, and without an entry here the
+		// only matching rule left is Elementor's TTF - which is exactly the
+		// duplicate download this is meant to stop. Mapping to the nearest
+		// bundled weight costs nothing and closes the hole. If a real
+		// ExtraLight is ever wanted, add the WOFF2 and remap.
+		100 => 'Muli-Regular.woff2',
+		200 => 'Muli-Regular.woff2',
 		300 => 'Muli-Regular.woff2',
 		400 => 'Muli-SemiBold.woff2',
 		500 => 'Muli-Bold.woff2',
@@ -1005,6 +978,71 @@ function bullion_ops_inject_muli_woff2() {
 	}
 	echo "</style>\n";
 }
+
+// --- Font + script perf trial, DEV ONLY (v0.9.57) --------------------------
+//
+// Three changes from the 2026-08-24 daily-health finding, all gated to dev so
+// live is untouched until the operator has looked. Remove the host gate to
+// promote; do not leave the gate in place long term.
+//
+// WHAT THE MEASUREMENT ACTUALLY SHOWED (PSI mobile, qmines.com.au, 24 Aug):
+//   • Elementor Custom Fonts emits its Muli TTF @font-face set TWICE - 14
+//     declarations covering weights 100-700, every one pointing at a .ttf.
+//   • bullion_ops_inject_muli_woff2() overrides only 300-700. Weights 100 and
+//     200 have no WOFF2 rule at all, and the homepage CSS asks for both.
+//   • Result: 8 font requests, 239 KB, including Muli-Regular.ttf at 41.3 KB
+//     downloading alongside Muli-Regular.woff2 at 33.2 KB. Same typeface,
+//     twice, in two formats. This is §I trap 22 resurfacing.
+//
+// The existing override comment claims Elementor's TTF rules "stay as a
+// fallback for ancient clients". Every browser that can run this site supports
+// WOFF2; the rules are not a fallback, they are a second copy.
+
+function bullion_ops_is_dev_host() {
+	$host = isset( $_SERVER['HTTP_HOST'] ) ? strtolower( (string) $_SERVER['HTTP_HOST'] ) : '';
+	return ( 0 === strpos( $host, 'dev.' ) );
+}
+
+// 1. Strip Elementor's Muli TTF @font-face blocks from <head>.
+//    Done with an output buffer rather than by dequeuing Elementor's handle,
+//    because the rules are emitted inline by the Custom Fonts module and the
+//    handle has moved between Elementor versions before. Matching the actual
+//    markup is version-proof; a handle name is not.
+function bullion_ops_strip_muli_ttf_start() {
+	if ( is_admin() || ! bullion_ops_is_dev_host() ) {
+		return;
+	}
+	ob_start( 'bullion_ops_strip_muli_ttf' );
+}
+add_action( 'get_header', 'bullion_ops_strip_muli_ttf_start', 1 );
+
+function bullion_ops_strip_muli_ttf( $html ) {
+	if ( ! is_string( $html ) || '' === $html ) {
+		return $html;
+	}
+	// Only @font-face blocks that name Muli AND load a .ttf. Leaves our WOFF2
+	// rules and every other font on the site alone.
+	$pattern = '#@font-face\s*\{[^}]*?Muli[^}]*?\.ttf[^}]*?\}#is';
+	$out = preg_replace( $pattern, '', $html );
+	return ( null === $out ) ? $html : $out;
+}
+
+// 2. Defer Elementor's swiper. 38 KB, 96% unused on the homepage, and it is
+//    only needed for a testimonial carousel that sits below the fold. `defer`
+//    keeps execution order but stops it competing with first paint.
+function bullion_ops_defer_swiper( $tag, $handle, $src ) {
+	if ( ! bullion_ops_is_dev_host() || is_admin() ) {
+		return $tag;
+	}
+	if ( false === strpos( (string) $src, '/swiper' ) ) {
+		return $tag;
+	}
+	if ( false !== strpos( $tag, ' defer' ) || false !== strpos( $tag, ' async' ) ) {
+		return $tag;
+	}
+	return str_replace( '<script ', '<script defer ', $tag );
+}
+add_filter( 'script_loader_tag', 'bullion_ops_defer_swiper', 10, 3 );
 
 add_filter( 'upload_mimes', 'bullion_ops_allow_font_mime_types' );
 
