@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.58
+ * Version: 0.9.59
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.58' );
+define( 'BULLION_OPS_VERSION', '0.9.59' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1028,16 +1028,11 @@ function bullion_ops_inject_muli_woff2() {
 // ancient clients". Every browser that can run this site supports WOFF2. They
 // are not a fallback, they are a second copy.
 
-function bullion_ops_is_dev_host() {
-	$host = isset( $_SERVER['HTTP_HOST'] ) ? strtolower( (string) $_SERVER['HTTP_HOST'] ) : '';
-	return ( 0 === strpos( $host, 'dev.' ) );
-}
-
 // 1. Strip Elementor's Muli TTF @font-face blocks. Output buffer rather than
 //    dequeuing a handle, because the rules are emitted inline by the Custom
 //    Fonts module and the handle has moved between Elementor versions.
 function bullion_ops_strip_muli_ttf_start() {
-	if ( is_admin() || ! bullion_ops_is_dev_host() ) {
+	if ( is_admin() ) {
 		return;
 	}
 	ob_start( 'bullion_ops_strip_muli_ttf' );
@@ -1056,7 +1051,7 @@ function bullion_ops_strip_muli_ttf( $html ) {
 // 2. Defer Elementor's swiper. 38 KB, 96% unused on the homepage, needed only
 //    for a testimonial carousel below the fold.
 function bullion_ops_defer_swiper( $tag, $handle, $src ) {
-	if ( ! bullion_ops_is_dev_host() || is_admin() ) {
+	if ( is_admin() ) {
 		return $tag;
 	}
 	if ( false === strpos( (string) $src, '/swiper' ) ) {
