@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.60
+ * Version: 0.9.61
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.60' );
+define( 'BULLION_OPS_VERSION', '0.9.61' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -525,6 +525,66 @@ add_action( 'rest_api_init', function() {
 		'permission_callback' => 'bullion_ops_permission',
 	] );
 } );
+
+// --- WebP for CSS background images (v0.9.61) ------------------------------
+//
+// WordPress and Imagify rewrite <img> tags to WebP automatically. They do NOT
+// touch `background-image` in CSS, so an Elementor hero section keeps serving
+// the original PNG even when a WebP sibling already exists next to it.
+//
+// /research/ was the case that surfaced it: a 1.22 MB PNG hero, about 70% of
+// the page weight, with a 362 KB WebP sitting beside it untouched since
+// Imagify generated it. Nothing needed recompressing -- the CSS just pointed
+// at the wrong file.
+//
+// This CANNOT live in the page's Elementor custom CSS. That gets silently
+// wiped by `document_save`, which the /elementor/regenerate route calls -- the
+// projects-page rule was lost that way on 14 Aug 2026 (see architecture map
+// section I, trap 29).
+// The plugin is the durable home, same as bullion_ops_project_tiles_css.
+//
+// Wrapped in @supports so a browser without image-set() simply keeps the
+// Elementor PNG rule. Nothing to detect, nothing to break.
+function bullion_ops_webp_backgrounds_map() {
+	// page slug => [ css selector, uploads-relative path to the ORIGINAL image ]
+	// The WebP is assumed to be "<original>.webp", which is Imagify's naming.
+	return [
+		'research' => [
+			'selector' => '.elementor-10839 .elementor-element.elementor-element-45658f1:not(.elementor-motion-effects-element-type-background) > .elementor-widget-wrap, .elementor-10839 .elementor-element.elementor-element-45658f1 > .elementor-widget-wrap > .elementor-motion-effects-container > .elementor-motion-effects-layer',
+			'path'     => '/2024/05/QML-research-hero.png',
+		],
+	];
+}
+
+add_action( 'wp_head', function() {
+	$map = bullion_ops_webp_backgrounds_map();
+	$css = '';
+	$uploads = wp_get_upload_dir();
+
+	foreach ( $map as $slug => $conf ) {
+		if ( ! is_page( $slug ) ) {
+			continue;
+		}
+		// Only rewrite if the WebP is actually on disk. A missing file would
+		// otherwise produce a broken hero, which is worse than a heavy one.
+		$webp_file = $uploads['basedir'] . $conf['path'] . '.webp';
+		if ( ! file_exists( $webp_file ) ) {
+			continue;
+		}
+		$png  = $uploads['baseurl'] . $conf['path'];
+		$webp = $png . '.webp';
+
+		$css .= '@supports (background-image: image-set(url("' . esc_url( $webp ) . '") type("image/webp"))) {'
+			. $conf['selector'] . '{background-image:image-set('
+			. 'url("' . esc_url( $webp ) . '") type("image/webp"),'
+			. 'url("' . esc_url( $png ) . '") type("image/png")'
+			. ') !important;}}';
+	}
+
+	if ( $css !== '' ) {
+		echo "\n<style id=\"bullion-ops-webp-backgrounds\">" . $css . "</style>\n";
+	}
+}, 20 );
 
 // --- WPCode snippet CRUD (v0.9.0) ------------------------------------------
 //
