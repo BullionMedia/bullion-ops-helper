@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.59
+ * Version: 0.9.60
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.59' );
+define( 'BULLION_OPS_VERSION', '0.9.60' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -272,41 +272,21 @@ add_filter( 'rank_math/sitemap/exclude_post', function( $exclude, $post_id ) {
 	return false;
 }, 10, 2 );
 
-// Belt-and-braces: if the URL still doesn't make it into the final set,
-// inject it directly.
-add_filter( 'rank_math/sitemap/urls', function( $urls ) {
-	$pages = get_posts( [
-		'post_type'      => 'page',
-		'post_status'    => 'publish',
-		'posts_per_page' => -1,
-		'post_parent__not_in' => [ 0 ],
-		'fields'         => 'ids',
-	] );
-	if ( empty( $pages ) ) {
-		return $urls;
-	}
-	$existing = [];
-	foreach ( $urls as $u ) {
-		if ( isset( $u['loc'] ) ) {
-			$existing[ $u['loc'] ] = true;
-		}
-	}
-	foreach ( $pages as $pid ) {
-		$robots = get_post_meta( $pid, 'rank_math_robots', true );
-		if ( is_array( $robots ) && in_array( 'noindex', $robots, true ) ) {
-			continue;
-		}
-		$link = get_permalink( $pid );
-		if ( isset( $existing[ $link ] ) ) {
-			continue;
-		}
-		$urls[] = [
-			'loc' => $link,
-			'mod' => get_the_modified_date( DATE_W3C, $pid ),
-		];
-	}
-	return $urls;
-}, 20 );
+// NOTE (v0.9.60): a `rank_math/sitemap/urls` filter used to sit here as
+// "belt-and-braces" injection. **That filter does not exist in Rank Math.**
+// Verified against the installed source, RM 1.0.277: the post-type provider
+// exposes `sitemap/entry`, `sitemap/exclude_post`, `sitemap/xml_post_url`,
+// `sitemap/post_object` and the `sitemap/get_posts/*` query filters -- there
+// is no `sitemap/urls`. The block was dead code from the day it was written
+// and never once ran.
+//
+// This is the SECOND filter invented in this file (v0.9.26/0.9.27 did the
+// same with `rank_math/sitemap/post_types`). Both times the dead hook made it
+// look like a safety net existed. Before adding a `rank_math/*` filter, grep
+// the installed plugin for the `do_filter( 'sitemap/... )` call that raises
+// it -- RM's Hooker trait prefixes `rank_math/`, so grepping the full name
+// against the source gives a false negative and grepping nothing at all gives
+// a false sense of coverage.
 
 // --- Defer below-the-fold WebLink widgets on the front page (v0.9.29) ------
 //
@@ -459,55 +439,92 @@ JS;
 // for asx_announcement. Only writes if the value isn't already 'on', so
 // there's no per-request DB write cost.
 //
-// Belt-and-braces: keep the `rank_math/sitemap/urls` filter to inject any
-// published announcement URL that still doesn't make it into the URL set.
+// Cache invalidation, not URL injection, is what this CPT actually needs.
+// See the sitemap-flush block further down.
 
-add_action( 'init', function() {
-	if ( ! post_type_exists( 'asx_announcement' ) ) {
+// --- Rank Math sitemap flush for asx_announcement (v0.9.60) ----------------
+//
+// Symptom, seen twice (31 Aug and 2 Sep 2026): a freshly published
+// announcement is live, 200, index/follow, `rm_indexable_verdict: indexable`,
+// and absent from asx_announcement-sitemap.xml. The only thing that has ever
+// fixed it is an admin save of Rank Math's Sitemap Settings, which is a
+// manual step nobody should have to remember after every publish.
+//
+// What actually clears it, verified against RM 1.0.277 source:
+//   RankMath\Sitemap\Cache_Watcher::invalidate( $type )      queues a clear
+//   RankMath\Sitemap\Cache_Watcher::invalidate_post( $id )   same, by post
+//   RankMath\Sitemap\Cache::invalidate_storage( $type )      deletes the files
+//
+// Cache_Watcher queues into a static and only flushes on `shutdown`, so a
+// caller that wants the cache gone *now* has to hit Cache::invalidate_storage
+// as well. We do both, and we never assume either class exists -- a Rank Math
+// update that renames them must degrade to a no-op, not a fatal.
+function bullion_ops_sitemap_flush( $type = 'asx_announcement' ) {
+	$done = [];
+
+	if ( class_exists( '\RankMath\Sitemap\Cache_Watcher' ) ) {
+		\RankMath\Sitemap\Cache_Watcher::invalidate( $type );
+		$done[] = 'cache_watcher_invalidate';
+	}
+	if ( class_exists( '\RankMath\Sitemap\Cache' ) ) {
+		\RankMath\Sitemap\Cache::invalidate_storage( $type );
+		\RankMath\Sitemap\Cache::invalidate_storage( '1' ); // the index itself
+		$done[] = 'cache_invalidate_storage';
+	}
+
+	return $done;
+}
+
+// Fire on publish. transition_post_status covers draft -> publish, which is
+// how the ASX pipeline publishes; save_post covers later edits.
+add_action( 'transition_post_status', function( $new, $old, $post ) {
+	if ( ! $post || 'asx_announcement' !== $post->post_type ) {
 		return;
 	}
-	$opts = get_option( 'rank-math-options-sitemap', [] );
-	if ( ! is_array( $opts ) ) {
-		$opts = [];
+	if ( 'publish' !== $new && 'publish' !== $old ) {
+		return;
 	}
-	if ( ( $opts['pt_asx_announcement_sitemap'] ?? '' ) !== 'on' ) {
-		$opts['pt_asx_announcement_sitemap'] = 'on';
-		update_option( 'rank-math-options-sitemap', $opts );
+	bullion_ops_sitemap_flush( 'asx_announcement' );
+}, 20, 3 );
+
+add_action( 'save_post_asx_announcement', function( $post_id ) {
+	if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+		return;
 	}
+	bullion_ops_sitemap_flush( 'asx_announcement' );
 }, 20 );
 
-add_filter( 'rank_math/sitemap/urls', function( $urls ) {
-	$posts = get_posts( [
-		'post_type'      => 'asx_announcement',
-		'post_status'    => 'publish',
-		'posts_per_page' => -1,
-		'fields'         => 'ids',
+// GET,POST — the WAF 403s POST to this namespace, so GET is what works from
+// outside. Same pattern as /cache/purge and /elementor/regenerate.
+add_action( 'rest_api_init', function() {
+	register_rest_route( BULLION_OPS_NS, '/sitemap/flush', [
+		'methods'             => 'GET,POST',
+		'callback'            => function( WP_REST_Request $req ) {
+			$type = (string) $req->get_param( 'type' );
+			$type = $type !== '' ? $type : 'asx_announcement';
+			$done = bullion_ops_sitemap_flush( $type );
+
+			// Report what the sitemap holds now so the caller can assert
+			// rather than trust. Regeneration happens on the next request.
+			$counts = null;
+			$url    = home_url( '/' . $type . '-sitemap.xml' );
+			$resp   = wp_remote_get( $url, [ 'timeout' => 15 ] );
+			if ( ! is_wp_error( $resp ) ) {
+				$body   = wp_remote_retrieve_body( $resp );
+				$counts = substr_count( $body, '<loc>' );
+			}
+
+			return [
+				'type'          => $type,
+				'invalidated'   => $done,
+				'sitemap_url'   => $url,
+				'locs_after'    => $counts,
+				'rank_math'     => defined( 'RANK_MATH_VERSION' ) ? RANK_MATH_VERSION : null,
+			];
+		},
+		'permission_callback' => 'bullion_ops_permission',
 	] );
-	if ( empty( $posts ) ) {
-		return $urls;
-	}
-	$existing = [];
-	foreach ( $urls as $u ) {
-		if ( isset( $u['loc'] ) ) {
-			$existing[ $u['loc'] ] = true;
-		}
-	}
-	foreach ( $posts as $pid ) {
-		$robots = get_post_meta( $pid, 'rank_math_robots', true );
-		if ( is_array( $robots ) && in_array( 'noindex', $robots, true ) ) {
-			continue;
-		}
-		$link = get_permalink( $pid );
-		if ( isset( $existing[ $link ] ) ) {
-			continue;
-		}
-		$urls[] = [
-			'loc' => $link,
-			'mod' => get_the_modified_date( DATE_W3C, $pid ),
-		];
-	}
-	return $urls;
-}, 20 );
+} );
 
 // --- WPCode snippet CRUD (v0.9.0) ------------------------------------------
 //
