@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.61
+ * Version: 0.9.62
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.61' );
+define( 'BULLION_OPS_VERSION', '0.9.62' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -553,6 +553,13 @@ function bullion_ops_webp_backgrounds_map() {
 			'selector' => '.elementor-10839 .elementor-element.elementor-element-45658f1:not(.elementor-motion-effects-element-type-background) > .elementor-widget-wrap, .elementor-10839 .elementor-element.elementor-element-45658f1 > .elementor-widget-wrap > .elementor-motion-effects-container > .elementor-motion-effects-layer',
 			'path'     => '/2024/05/QML-research-hero.png',
 		],
+		// Environmental hero (v0.9.62). The photo sits on the COLUMN, not the
+		// section -- the section's own Header-1.png is a 3 KB spacer graphic,
+		// so swapping the section background would change nothing visible.
+		'environmental' => [
+			'selector' => '.elementor-10792 .elementor-element.elementor-element-e12d0c7:not(.elementor-motion-effects-element-type-background) > .elementor-widget-wrap, .elementor-10792 .elementor-element.elementor-element-e12d0c7 > .elementor-widget-wrap > .elementor-motion-effects-container > .elementor-motion-effects-layer',
+			'path'     => '/2026/09/qmines-environmental-monitoring-station-queensland.jpg',
+		],
 	];
 }
 
@@ -571,13 +578,20 @@ add_action( 'wp_head', function() {
 		if ( ! file_exists( $webp_file ) ) {
 			continue;
 		}
-		$png  = $uploads['baseurl'] . $conf['path'];
-		$webp = $png . '.webp';
+		$original = $uploads['baseurl'] . $conf['path'];
+		$webp     = $original . '.webp';
+
+		// Derive the fallback type from the extension (v0.9.62). It was
+		// hardcoded to image/png while /research/ was the only entry; the
+		// Environmental hero is a JPEG, and a wrong type() makes the browser
+		// skip the fallback rather than degrade to it.
+		$ext  = strtolower( pathinfo( $conf['path'], PATHINFO_EXTENSION ) );
+		$type = in_array( $ext, [ 'jpg', 'jpeg' ], true ) ? 'image/jpeg' : 'image/' . $ext;
 
 		$css .= '@supports (background-image: image-set(url("' . esc_url( $webp ) . '") type("image/webp"))) {'
 			. $conf['selector'] . '{background-image:image-set('
 			. 'url("' . esc_url( $webp ) . '") type("image/webp"),'
-			. 'url("' . esc_url( $png ) . '") type("image/png")'
+			. 'url("' . esc_url( $original ) . '") type("' . $type . '")'
 			. ') !important;}}';
 	}
 
