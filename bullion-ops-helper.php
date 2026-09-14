@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.64
+ * Version: 0.9.65
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.64' );
+define( 'BULLION_OPS_VERSION', '0.9.65' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2856,8 +2856,19 @@ function bullion_ops_render_insights_grid( $atts ) {
 		'no_found_rows'  => true,
 	];
 	if ( 'pillar-first' === $atts['orderby'] ) {
-		$query_args['orderby'] = 'parent';
-		$query_args['order']   = 'ASC';
+		// Pillar first, then NEWEST first within the cluster (v0.9.65).
+		//
+		// Ordering by parent alone left every cluster post tied -- they all
+		// share the pillar as parent -- with no tie-break, so MySQL returned
+		// them in whatever order it liked. dev and live showed the same three
+		// cards in different orders on 14 Sep 2026, and neither was stable:
+		// a cache purge or a re-save could reshuffle the live page with
+		// nobody touching it.
+		//
+		// 'date' => 'DESC' makes it deterministic and puts the newest article
+		// top-left, which is the operator's call and the normal convention for
+		// an index: "newer articles from the left make more sense".
+		$query_args['orderby'] = [ 'parent' => 'ASC', 'date' => 'DESC' ];
 	} elseif ( in_array( $atts['orderby'], [ 'title', 'date', 'menu_order' ], true ) ) {
 		$query_args['orderby'] = $atts['orderby'];
 		$query_args['order']   = strtoupper( $atts['order'] );
