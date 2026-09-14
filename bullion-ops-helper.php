@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.63
+ * Version: 0.9.64
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.63' );
+define( 'BULLION_OPS_VERSION', '0.9.64' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2727,6 +2727,100 @@ add_shortcode( 'current_year', 'bullion_ops_current_year_shortcode' );
 // bullion_ops_get_insights_visual_text() slug map), tag label ("Pillar" for
 // parent=0, "Cluster" for parent!=0), title, 20-word excerpt, meta line
 // (read time + published date, both auto-computed).
+
+// --- Featured insight shortcode (v0.9.64) ----------------------------------
+//
+// [insights_featured slug="is-copper-a-good-investment"] renders the "Featured"
+// panel at the top of /insights/ from LIVE post data, replacing hand-written
+// HTML that could not update itself.
+//
+// Why this exists: on 2026-09-14 the panel still read "Updated 27 May 2026"
+// while the article it points at read "Updated 14 Sep 2026". The title and
+// excerpt were equally frozen. The cards BELOW it, rendered by
+// [insights_grid], were correct the whole time -- so the single most prominent
+// item on the page was the only one that could rot, and it had been wrong for
+// nearly four months without anyone noticing.
+//
+// Everything here derives from the post: title, permalink, excerpt, featured
+// image, reading time, published and updated dates, and the Deep Dive / Guide
+// label. Nothing to keep in sync by hand.
+//
+// "Updated" is omitted when it would match "Published", so a page that has
+// never been revised does not carry a redundant duplicate date.
+add_shortcode( 'insights_featured', 'bullion_ops_render_insights_featured' );
+
+function bullion_ops_render_insights_featured( $atts ) {
+	$atts = shortcode_atts( [ 'slug' => '' ], $atts, 'insights_featured' );
+	$slug = sanitize_title( (string) $atts['slug'] );
+	if ( '' === $slug ) {
+		return '';
+	}
+
+	$pages = get_posts( [
+		'post_type'        => 'page',
+		'post_status'      => 'publish',
+		'name'             => $slug,
+		'posts_per_page'   => 1,
+		'suppress_filters' => false,
+	] );
+	// Render nothing rather than a broken panel if the slug does not resolve --
+	// same guard as the project FAQ shortcode.
+	if ( empty( $pages ) ) {
+		return '';
+	}
+	$post_obj = $pages[0];
+	$id       = $post_obj->ID;
+
+	$title = get_the_title( $id );
+	$link  = get_permalink( $id );
+
+	// Prefer the operator-set Excerpt field, same precedence as the cards.
+	$raw_excerpt = trim( (string) $post_obj->post_excerpt );
+	$excerpt = '' !== $raw_excerpt
+		? strip_shortcodes( wp_strip_all_tags( $raw_excerpt ) )
+		: wp_trim_words( strip_shortcodes( wp_strip_all_tags( get_the_excerpt( $id ) ) ), 30, '&hellip;' );
+
+	$tag    = ( 0 === (int) $post_obj->post_parent ) ? 'Deep Dive' : 'Guide';
+	$visual = bullion_ops_get_insights_visual_text( $post_obj->post_name, $title );
+
+	$words = str_word_count( wp_strip_all_tags( strip_shortcodes( $post_obj->post_content ) ) );
+	$mins  = max( 1, (int) round( ( $words > 0 ? $words : 1 ) / 250 ) );
+
+	$pub_ts = strtotime( $post_obj->post_date );
+	$mod_ts = strtotime( $post_obj->post_modified );
+	$pub    = date_i18n( 'j M Y', $pub_ts );
+	$mod    = date_i18n( 'j M Y', $mod_ts );
+
+	$meta  = '<span>' . $mins . ' min read</span>';
+	$meta .= '<span>Published ' . esc_html( $pub ) . '</span>';
+	if ( $mod !== $pub ) {
+		$meta .= '<span>Updated ' . esc_html( $mod ) . '</span>';
+	}
+
+	// eager, not lazy: this panel is above the fold and is the page's LCP
+	// candidate. The grid cards below it stay lazy.
+	$thumb_html = has_post_thumbnail( $id )
+		? get_the_post_thumbnail( $id, 'full', [ 'loading' => 'eager', 'decoding' => 'async' ] )
+		: '';
+
+	$visual_text_html = $visual
+		? '<div class="qm-insights-featured-visual-text">' . esc_html( $visual ) . '</div>'
+		: '';
+
+	return '<article class="qm-insights-featured">'
+		. '<div class="qm-insights-featured-visual">'
+		. $thumb_html
+		. $visual_text_html
+		. '</div>'
+		. '<div class="qm-insights-featured-body">'
+		. '<span class="qm-insights-featured-tag">' . esc_html( $tag ) . '</span>'
+		. '<h2><a href="' . esc_url( $link ) . '">' . esc_html( $title ) . '</a></h2>'
+		. '<p class="qm-insights-featured-excerpt">' . esc_html( $excerpt ) . '</p>'
+		. '<p class="qm-insights-featured-meta">' . $meta . '</p>'
+		. '<a class="qm-insights-featured-cta" href="' . esc_url( $link ) . '">Read me &rarr;</a>'
+		. '</div>'
+		. '</article>';
+}
 
 add_shortcode( 'insights_grid', 'bullion_ops_render_insights_grid' );
 
