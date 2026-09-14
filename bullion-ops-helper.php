@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.62
+ * Version: 0.9.63
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.62' );
+define( 'BULLION_OPS_VERSION', '0.9.63' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -599,6 +599,38 @@ add_action( 'wp_head', function() {
 		echo "\n<style id=\"bullion-ops-webp-backgrounds\">" . $css . "</style>\n";
 	}
 }, 20 );
+
+// --- Keep our inline CSS out of WP Rocket's Remove Unused CSS (v0.9.63) ----
+//
+// RUCSS rebuilds each page into one `wpr-usedcss` block and EMPTIES every other
+// inline <style>. It keeps rules it can attribute to a used selector and drops
+// the at-rules it cannot, so both of this plugin's inline blocks were being
+// deleted on live:
+//
+//   bullion-ops-webp-backgrounds   @supports + image-set() -> dropped, so the
+//     heavy original background was served and the WebP sibling ignored. 837 KB
+//     wasted per view on /research/, 187 KB on /environmental/.
+//
+//   bullion-ops-muli-woff2         @font-face -> dropped, so Muli fell back to
+//     the legacy .ttf declarations still present elsewhere: about 92 KB a weight
+//     against about 32 KB for the woff2 this block exists to serve.
+//
+// INVISIBLE ON DEV, where RUCSS is off. Dev emitted both blocks correctly the
+// whole time, so /research/ looked fixed from the day v0.9.61 shipped and never
+// was. Same shape as the WP-Cron share-price bug: only exists on the host with
+// real caching, cannot be reproduced on the host we test on. Never conclude this
+// feature works by checking dev.
+//
+// WP Rocket joins these with `|` and matches them as a regex against each inline
+// style's ATTRIBUTE string, not its content
+// (inc/Engine/Optimization/RUCSS/Controller/UsedCSS.php:345), so the element id
+// is enough. Verified against the installed WP Rocket rather than assumed.
+add_filter( 'rocket_rucss_inline_atts_exclusions', function( $exclusions ) {
+	return array_merge( (array) $exclusions, [
+		'bullion-ops-webp-backgrounds',
+		'bullion-ops-muli-woff2',
+	] );
+} );
 
 // --- WPCode snippet CRUD (v0.9.0) ------------------------------------------
 //
