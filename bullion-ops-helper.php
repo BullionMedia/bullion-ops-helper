@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.66
+ * Version: 0.9.67
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.66' );
+define( 'BULLION_OPS_VERSION', '0.9.67' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -629,6 +629,12 @@ add_filter( 'rocket_rucss_inline_atts_exclusions', function( $exclusions ) {
 	return array_merge( (array) $exclusions, [
 		'bullion-ops-webp-backgrounds',
 		'bullion-ops-muli-woff2',
+		// v0.9.67. Both shipped in v0.9.66/0.9.67 without being listed here, and
+		// RUCSS emptied them on live within the hour. Dev has no RUCSS, so dev
+		// looked perfect throughout — the same trap as the stale share price.
+		// EVERY inline <style> this plugin prints belongs in this list.
+		'bullion-ops-article-disclaimer-css',
+		'bullion-ops-research-tile-css',
 	] );
 } );
 
@@ -4230,6 +4236,66 @@ function bullion_ops_inject_article_disclaimer_css() {
 @media (max-width: 600px) {
 	.asx-article-disclaimer { margin: 32px 0 90px 0; }
 	.asx-article-disclaimer p { font-size: 12px; }
+}
+</style>
+	<?php
+}
+
+// --- /research/ report tiles: uniform size (v0.9.67) ------------------------
+//
+// The report grid is an Essential Addons Filterable Gallery. EAEL sizes each
+// thumbnail with `.gallery-item-thumbnail-wrap > img { width: 100% }` — a
+// DIRECT-child selector.
+//
+// Our WebP conversion wraps converted images in a <picture> element. That makes
+// the <img> a grandchild, EAEL's selector stops matching, and the image falls
+// back to its natural 212px inside a 427px column. 14 of the 18 covers are
+// WebP-converted and shrank; the 4 that were never converted kept filling their
+// column. Masonry then faithfully packed the mess, which is why the grid read
+// as "some thumbnails are set to a different size" — the setting was never the
+// difference, the <picture> wrapper was.
+//
+// Measured on live 2026-09-16 before the fix: 14 tiles 427x420 with a 212x300
+// image, 4 tiles 427x696 with a 407x575 image. After: all 18 at 427x696 with
+// 407x575. Operator asked to standardise on the bigger one.
+//
+// aspect-ratio pins every tile to the same height. The covers vary about 5% in
+// shape (0.693 to 0.730 against the 0.707 of a scanned A4), so object-fit trims
+// at most a few pixels off the top and bottom of two of them. Nothing near the
+// report titles.
+//
+// Deliberately NOT fixing this by un-converting those images or by dropping the
+// `>` from EAEL's own stylesheet. The first loses the WebP saving the site-speed
+// work bought; the second is a vendor file that any plugin update overwrites.
+//
+// Scoped to the research page, not applied gallery-wide, because no other EAEL
+// gallery on the site has been measured and a global rule would resize them
+// sight-unseen.
+
+add_action( 'wp_head', 'bullion_ops_inject_research_tile_css', 100 );
+
+function bullion_ops_inject_research_tile_css() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post || 'research' !== $post->post_name ) {
+		return;
+	}
+	?>
+<style id="bullion-ops-research-tile-css">
+/* Re-establish the fill that EAEL's own direct-child rule loses to <picture>. */
+.eael-filter-gallery-container .gallery-item-thumbnail-wrap > picture {
+	display: block;
+	width: 100%;
+}
+.eael-filter-gallery-container .gallery-item-thumbnail-wrap > picture > img,
+.eael-filter-gallery-container .gallery-item-thumbnail-wrap > img {
+	display: block;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 212 / 300;
+	object-fit: cover;
 }
 </style>
 	<?php
