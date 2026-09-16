@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.65
+ * Version: 0.9.66
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.65' );
+define( 'BULLION_OPS_VERSION', '0.9.66' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4116,4 +4116,121 @@ function bullion_ops_price_refresh_endpoint() {
 		);
 	}
 	return [ 'ok' => true, 'price' => $record['price'], 'fetched_at' => gmdate( 'c', $record['fetched_at'] ) ];
+}
+
+// --- Article disclaimer (v0.9.66) ------------------------------------------
+//
+// Andrew Sparke asked for a general-information disclaimer at the foot of every
+// pillar / cluster article (2026-09-16). Not a compliance remediation — a
+// standing safety net under copy that cites third-party bank forecasts and JORC
+// figures.
+//
+// Emitted by the plugin rather than baked into the draft by publish_article.py,
+// for two reasons:
+//
+//   1. The four already-published articles pick it up on the next render with
+//      no republish. Republishing four live pages to add one paragraph is the
+//      exact churn the diff-the-whole-page rule exists to avoid.
+//   2. Wording changes stay a single edit. A copy baked into each post body
+//      would need four page rewrites every time legal moves a comma.
+//
+// So publish_article.py and the blog-writer MUST NOT write this block into a
+// draft. If a draft ever carries one, the idempotency guard below suppresses
+// the injected copy and the two will silently drift.
+//
+// Enrolment reuses bullion_ops_get_pillar_hero_slugs(), same as the hero, the
+// header wrap and the TOC — a new article is enrolled for all four by one act.
+//
+// NOT applied to asx_announcement pages. Those are a frozen historical record
+// and would need announcement-specific wording, which is a separate decision.
+
+define( 'BULLION_OPS_ARTICLE_DISCLAIMER',
+	'This article is general information only and doesn\'t take into account your '
+	. 'personal objectives, financial situation or needs. Third-party forecasts and '
+	. 'JORC estimates referenced here are not guarantees, and past performance is no '
+	. 'indicator of future results. Do your own research and speak to a licensed '
+	. 'financial adviser before making any investment decision.'
+);
+
+add_filter( 'the_content', 'bullion_ops_append_article_disclaimer', 30 );
+
+function bullion_ops_append_article_disclaimer( $content ) {
+	if ( is_admin() || ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
+		return $content;
+	}
+	$post = get_post();
+	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_pillar_hero_slugs(), true ) ) {
+		return $content;
+	}
+	// Idempotent: never double up if a draft already carries one.
+	if ( false !== strpos( $content, 'asx-article-disclaimer' ) ) {
+		return $content;
+	}
+
+	$block = '<div class="asx-article-disclaimer"><p>'
+		. esc_html( BULLION_OPS_ARTICLE_DISCLAIMER )
+		. '</p></div>';
+
+	// Land it INSIDE .asx-article-wrapper so it inherits the article's column
+	// width and padding. A plain append would put it outside the wrapper and it
+	// would run the full content width.
+	$dom = bullion_ops_toc_load_dom( $content );
+	if ( ! $dom ) {
+		return $content . $block;
+	}
+	$xpath = new DOMXPath( $dom );
+	$wrap  = $xpath->query( '//*[contains(concat(" ", normalize-space(@class), " "), " asx-article-wrapper ")]' );
+	if ( ! $wrap || 0 === $wrap->length ) {
+		return $content . $block;
+	}
+
+	$frag = $dom->createDocumentFragment();
+	if ( ! @$frag->appendXML( '<div class="asx-article-disclaimer"><p>'
+		. htmlspecialchars( BULLION_OPS_ARTICLE_DISCLAIMER, ENT_XML1 | ENT_QUOTES, 'UTF-8' )
+		. '</p></div>' ) ) {
+		return $content . $block;
+	}
+	$wrap->item( 0 )->appendChild( $frag );
+
+	$out = bullion_ops_toc_dom_to_html( $dom );
+	return ( null === $out ) ? $content . $block : $out;
+}
+
+// Small, muted, hairline rule above. Deliberately no heading: a "Disclaimer"
+// label reads as a warning sign; run as a closing note it reads as a company
+// being straight with the reader (blog-writer's call, 2026-09-16).
+add_action( 'wp_head', 'bullion_ops_inject_article_disclaimer_css', 100 );
+
+function bullion_ops_inject_article_disclaimer_css() {
+	if ( ! is_singular() ) {
+		return;
+	}
+	$post = get_post();
+	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_pillar_hero_slugs(), true ) ) {
+		return;
+	}
+	?>
+<style id="bullion-ops-article-disclaimer-css">
+.asx-article-disclaimer {
+	margin: 40px 0 150px 0;
+	padding-top: 18px;
+	border-top: 1px solid #e3e8ea;
+}
+.asx-article-disclaimer p {
+	margin: 0;
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: #7d8b91;
+}
+/* .asx-article-faq:last-child carries the article's 150px trailing whitespace,
+   set by the operator on 2026-09-15. Appending the disclaimer makes the FAQ no
+   longer :last-child, so that rule stops firing on its own and the disclaimer
+   inherits the 150px instead. The page tail is unchanged; the disclaimer simply
+   sits inside the gap that was already there. */
+@media (max-width: 600px) {
+	.asx-article-disclaimer { margin: 32px 0 90px 0; }
+	.asx-article-disclaimer p { font-size: 12px; }
+}
+</style>
+	<?php
 }
