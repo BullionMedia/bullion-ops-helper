@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.70
+ * Version: 0.9.72
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.70' );
+define( 'BULLION_OPS_VERSION', '0.9.72' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4378,18 +4378,44 @@ function bullion_ops_inject_research_tile_css() {
  */
 .eael-filter-gallery-container .eael-gallery-grid-item {
 	height: auto !important;
-	overflow: visible !important;
+	/* overflow stays hidden: it is what clips the cover image to the card's
+	 * 10px corner radius. v0.9.69 set it visible to stop the widget's fixed
+	 * height cutting long titles off, which silently squared off every card.
+	 * The height pin is removed in the page data instead, so hidden is safe.
+	 * NOTE: that page-data change is per environment. If this CSS is live on a
+	 * host whose gallery still has eael_fg_grid_item_height set, cards will
+	 * clip. Push both together. */
+	overflow: hidden !important;
 	margin-left: 16px;
 	margin-right: 16px;
 	margin-bottom: 40px;
 }
-.eael-filter-gallery-container .gallery-item-caption-wrap {
+/* Only the CARD caption goes into normal flow. There are two elements with the
+ * .gallery-item-caption-wrap class per card: this one, which holds the title and
+ * the house/date line, and a second inside the thumbnail carrying the zoom and
+ * download buttons. v0.9.69 matched the bare class and pushed the buttons out of
+ * their overlay into a grey band below the image. Keep the two apart. */
+.eael-filter-gallery-container .gallery-item-caption-wrap.caption-style-card {
 	position: static !important;
 	height: auto !important;
 }
+.eael-filter-gallery-container .gallery-item-caption-wrap.caption-style-hoverer {
+	position: absolute !important;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100% !important;
+}
+/* Horizontal padding belongs on the caption wrapper, which is the element
+ * carrying the grey background. The title and the house/date line are siblings
+ * inside it, so padding either one individually left them on different left
+ * edges (operator, 2026-09-17). Pad the parent once; both children align. */
+.eael-filter-gallery-container .gallery-item-caption-wrap.caption-style-card {
+	padding: 14px 20px 16px !important;
+}
 .eael-filter-gallery-container .fg-item-content {
 	display: block;
-	padding: 16px 20px 18px;
+	padding: 0 !important;
 	box-sizing: border-box;
 	overflow: hidden !important;
 }
@@ -4398,13 +4424,17 @@ function bullion_ops_inject_research_tile_css() {
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden !important;
-	margin: 0 0 10px;
+	/* 4px, not 10: the title and the house/date line are one unit and were
+	 * reading as two separate blocks (operator, 2026-09-17). */
+	margin: 0 0 6px !important;
+	padding: 0 !important;
 	font-size: 18px;
 	line-height: 1.3;
 	height: calc(2 * 1.3 * 18px);
 }
 .eael-filter-gallery-container .fg-item-content > p {
-	margin: 0;
+	margin: 0 !important;
+	padding: 0 !important;
 }
 @media (max-width: 767px) {
 	.eael-filter-gallery-container .eael-gallery-grid-item {
