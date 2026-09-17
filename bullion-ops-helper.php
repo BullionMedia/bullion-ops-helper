@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.72
+ * Version: 0.9.73
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.72' );
+define( 'BULLION_OPS_VERSION', '0.9.73' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4424,13 +4424,18 @@ function bullion_ops_inject_research_tile_css() {
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden !important;
-	/* 4px, not 10: the title and the house/date line are one unit and were
+	/* 6px, not 31: the title and the house/date line are one unit and were
 	 * reading as two separate blocks (operator, 2026-09-17). */
 	margin: 0 0 6px !important;
 	padding: 0 !important;
-	font-size: 18px;
-	line-height: 1.3;
-	height: calc(2 * 1.3 * 18px);
+	/* Typography is the operator's to set in the widget. This rule used to pin
+	 * font-size to 18px and compute the two-line box from that number, which
+	 * broke the moment he changed the size in Elementor: the box stayed sized
+	 * for 18px text while the text rendered at 20px. The box is now expressed
+	 * in line heights, so it follows whatever he sets. The px value is a
+	 * fallback for engines without the lh unit and is overridden right after. */
+	height: 47px;
+	height: 2lh;
 }
 .eael-filter-gallery-container .fg-item-content > p {
 	margin: 0 !important;
