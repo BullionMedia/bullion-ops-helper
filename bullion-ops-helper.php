@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.67
+ * Version: 0.9.68
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.67' );
+define( 'BULLION_OPS_VERSION', '0.9.68' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4296,6 +4296,30 @@ function bullion_ops_inject_research_tile_css() {
 	height: auto;
 	aspect-ratio: 212 / 300;
 	object-fit: cover;
+}
+/* Card dates, normalised (v0.9.68).
+ *
+ * Seven of the 18 cards hold their date as a plain <p> at 400/14px. The other
+ * eleven hold it inside a nested Elementor text-editor widget whose content is
+ * a <b>, rendering 700/16px. Measured on live 2026-09-17, both numbers.
+ *
+ * Operator asked for one weight across all of them. The size is normalised in
+ * the same rule because 16px next to 14px reads as the same defect, and fixing
+ * only the weight would have left half the difference visible.
+ *
+ * Scoped to .fg-item-content, which holds ONLY the date. The card's <h2> is a
+ * sibling outside it and keeps its own 600/20px — do not widen this selector
+ * to the caption wrapper or the headings flatten too.
+ *
+ * Done in CSS rather than by editing eleven Elementor captions: the nesting is
+ * how those rows were built, a future card added the same way inherits the fix,
+ * and eleven hand-edits to live widgets is eleven chances to break a caption.
+ */
+.eael-filter-gallery-container .fg-item-content,
+.eael-filter-gallery-container .fg-item-content * {
+	font-weight: 400;
+	font-size: 14px;
+	line-height: 1.5;
 }
 </style>
 	<?php
