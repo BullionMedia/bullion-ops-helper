@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.69
+ * Version: 0.9.70
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.69' );
+define( 'BULLION_OPS_VERSION', '0.9.70' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4363,9 +4363,14 @@ function bullion_ops_inject_research_tile_css() {
  *      card sizes from its contents.
  *   2. The caption is taken out of absolute positioning into normal flow, so a
  *      three-line title pushes the card down instead of overflowing it.
- *   3. The title box is fixed at exactly three lines and clamped. Every card is
- *      then image-height + three lines + meta line, which is the same number on
+ *   3. The title box is fixed at exactly two lines and clamped. Every card is
+ *      then image-height + two lines + meta line, which is the same number on
  *      all 18 regardless of how long the title is.
+ *
+ * Two lines, not three: at three the grey caption band was too deep for the
+ * cards with short titles (operator, 2026-09-17). The trade is that a title
+ * longer than about 60 characters ellipsises, so the long ones are shortened at
+ * source in the gallery data rather than left to clip mid-word.
  *
  * The title font-size override is deliberate: the widget's own 20px setting
  * suited a two-word company name and makes a 15-word report title wrap to five
@@ -4390,13 +4395,13 @@ function bullion_ops_inject_research_tile_css() {
 }
 .eael-filter-gallery-container .fg-item-title {
 	display: -webkit-box !important;
-	-webkit-line-clamp: 3;
+	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden !important;
 	margin: 0 0 10px;
 	font-size: 18px;
 	line-height: 1.3;
-	height: calc(3 * 1.3 * 18px);
+	height: calc(2 * 1.3 * 18px);
 }
 .eael-filter-gallery-container .fg-item-content > p {
 	margin: 0;
