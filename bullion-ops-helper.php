@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.68
+ * Version: 0.9.69
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.68' );
+define( 'BULLION_OPS_VERSION', '0.9.69' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4272,6 +4272,35 @@ function bullion_ops_inject_article_disclaimer_css() {
 // gallery on the site has been measured and a global rule would resize them
 // sight-unseen.
 
+// The gallery widget prints each card title as an <h2>, which makes a report
+// title a structural peer of the page's own "Key facts" and "In Summary"
+// headings rather than a child of the reports section. Demoted to <h3> so the
+// page's outline reads correctly. Recommended by the SEO strategist alongside
+// the title change, 2026-09-17, and done here because the heading level is not
+// exposed as a widget setting.
+//
+// Deliberately narrow: matches the widget's own class on this page only, and
+// rewrites the tag alone. If EAEL ever changes that class the filter stops
+// matching and the headings simply stay as <h2> — it cannot corrupt the markup.
+
+add_filter( 'the_content', 'bullion_ops_research_card_heading_level', 40 );
+
+function bullion_ops_research_card_heading_level( $content ) {
+	if ( is_admin() || ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
+		return $content;
+	}
+	$post = get_post();
+	if ( ! $post || 'research' !== $post->post_name ) {
+		return $content;
+	}
+	$content = preg_replace(
+		'#<h2(\s[^>]*class="[^"]*\bfg-item-title\b[^"]*"[^>]*)>(.*?)</h2>#is',
+		'<h3$1>$2</h3>',
+		$content
+	);
+	return $content;
+}
+
 add_action( 'wp_head', 'bullion_ops_inject_research_tile_css', 100 );
 
 function bullion_ops_inject_research_tile_css() {
@@ -4320,6 +4349,64 @@ function bullion_ops_inject_research_tile_css() {
 	font-weight: 400;
 	font-size: 14px;
 	line-height: 1.5;
+}
+/* Card layout, v0.9.69.
+ *
+ * Each card now carries the report's own title (from page 1 of its PDF) as the
+ * heading, with the research house and the date on the muted line below. Titles
+ * run from 14 to 103 characters, so the card has to absorb that variance or the
+ * grid goes ragged again.
+ *
+ * Three things are doing the work:
+ *   1. The widget pins every card to a fixed height and clips anything taller.
+ *      That pin is removed on the page itself; this restores height:auto so the
+ *      card sizes from its contents.
+ *   2. The caption is taken out of absolute positioning into normal flow, so a
+ *      three-line title pushes the card down instead of overflowing it.
+ *   3. The title box is fixed at exactly three lines and clamped. Every card is
+ *      then image-height + three lines + meta line, which is the same number on
+ *      all 18 regardless of how long the title is.
+ *
+ * The title font-size override is deliberate: the widget's own 20px setting
+ * suited a two-word company name and makes a 15-word report title wrap to five
+ * lines.
+ */
+.eael-filter-gallery-container .eael-gallery-grid-item {
+	height: auto !important;
+	overflow: visible !important;
+	margin-left: 16px;
+	margin-right: 16px;
+	margin-bottom: 40px;
+}
+.eael-filter-gallery-container .gallery-item-caption-wrap {
+	position: static !important;
+	height: auto !important;
+}
+.eael-filter-gallery-container .fg-item-content {
+	display: block;
+	padding: 16px 20px 18px;
+	box-sizing: border-box;
+	overflow: hidden !important;
+}
+.eael-filter-gallery-container .fg-item-title {
+	display: -webkit-box !important;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden !important;
+	margin: 0 0 10px;
+	font-size: 18px;
+	line-height: 1.3;
+	height: calc(3 * 1.3 * 18px);
+}
+.eael-filter-gallery-container .fg-item-content > p {
+	margin: 0;
+}
+@media (max-width: 767px) {
+	.eael-filter-gallery-container .eael-gallery-grid-item {
+		margin-left: 8px;
+		margin-right: 8px;
+		margin-bottom: 28px;
+	}
 }
 </style>
 	<?php
