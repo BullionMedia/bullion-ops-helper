@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.73
+ * Version: 0.9.74
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.73' );
+define( 'BULLION_OPS_VERSION', '0.9.74' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -548,19 +548,24 @@ add_action( 'rest_api_init', function() {
 function bullion_ops_webp_backgrounds_map() {
 	// page slug => [ css selector, uploads-relative path to the ORIGINAL image ]
 	// The WebP is assumed to be "<original>.webp", which is Imagify's naming.
-	return [
-		'research' => [
-			'selector' => '.elementor-10839 .elementor-element.elementor-element-45658f1:not(.elementor-motion-effects-element-type-background) > .elementor-widget-wrap, .elementor-10839 .elementor-element.elementor-element-45658f1 > .elementor-widget-wrap > .elementor-motion-effects-container > .elementor-motion-effects-layer',
-			'path'     => '/2024/05/QML-research-hero.png',
-		],
-		// Environmental hero (v0.9.62). The photo sits on the COLUMN, not the
-		// section -- the section's own Header-1.png is a 3 KB spacer graphic,
-		// so swapping the section background would change nothing visible.
-		'environmental' => [
-			'selector' => '.elementor-10792 .elementor-element.elementor-element-e12d0c7:not(.elementor-motion-effects-element-type-background) > .elementor-widget-wrap, .elementor-10792 .elementor-element.elementor-element-e12d0c7 > .elementor-widget-wrap > .elementor-motion-effects-container > .elementor-motion-effects-layer',
-			'path'     => '/2026/09/qmines-environmental-monitoring-station-queensland.jpg',
-		],
-	];
+	// EMPTY ON PURPOSE (v0.9.74). The mechanism stays; both entries are gone.
+	//
+	// This map rewrote a page's hero background to the WebP twin at render time,
+	// leaving the ORIGINAL image in the Elementor data. That turned out to cost
+	// more than it saved: WP Rocket builds its LCP preload from the Elementor
+	// value, so on /environmental/ it preloaded the 628 KB JPEG at
+	// fetchpriority=high while the page painted the 442 KB WebP. Both downloaded,
+	// about 1 MB for one image, and the useless one had priority.
+	//
+	// Fixed at source instead: the Elementor background on both pages now points
+	// directly at a WebP, so the preload, the CSS and the paint all agree and one
+	// file downloads. With that done, an override here would only force the old
+	// file back, which is exactly what it did to the re-encoded /research/ hero
+	// until this was emptied.
+	//
+	// Keep the mechanism for a hero that genuinely cannot be repointed in
+	// Elementor. Anything that CAN be repointed should be, not listed here.
+	return [];
 }
 
 add_action( 'wp_head', function() {
