@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.74
+ * Version: 0.9.75
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.74' );
+define( 'BULLION_OPS_VERSION', '0.9.75' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2343,6 +2343,31 @@ function bullion_ops_inject_asx_compact_table_css() {
 	}
 	?>
 <style id="bullion-ops-asx-compact-table-css">
+/* Competent Person sub-statement headings (v0.9.75).
+ *
+ * The pipeline demotes "Ore Reserve Estimate", "Mineral Resource Estimate" and
+ * "Exploration Results and Exploration Targets" from h3 to h4 so they nest
+ * UNDER "Competent Person Statements" rather than sitting as siblings of their
+ * own parent. That nesting is correct and was an SEO-auditor fix on 2026-08-06.
+ *
+ * Nothing styled h4 inside the announcement body, so it fell back to the
+ * theme's 24px default and those three lines rendered LARGER than the h3
+ * heading containing them. Operator spotted it 2026-09-23 on seven pages going
+ * back to 18 August, and pointed at the Mt Mackenzie page, which predates the
+ * demotion and still uses h3, as the correct appearance.
+ *
+ * Values copied from the h3 as it computes on that page, so an h4 sub-statement
+ * and a pre-August h3 one are indistinguishable.
+ */
+.asx-official-announcement h4 {
+	font-size: 14px;
+	font-weight: 600;
+	color: #5a6b73;
+	line-height: 1.4;
+	margin: 12px 0 8px;
+	text-transform: none;
+	letter-spacing: normal;
+}
 .asx-official-announcement table.asx-table-compact td {
 	font-size: 11px !important;
 	padding: 4px 8px !important;
