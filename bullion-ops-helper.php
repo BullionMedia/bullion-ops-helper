@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.76
+ * Version: 0.9.77
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.76' );
+define( 'BULLION_OPS_VERSION', '0.9.77' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -640,6 +640,9 @@ add_filter( 'rocket_rucss_inline_atts_exclusions', function( $exclusions ) {
 		// EVERY inline <style> this plugin prints belongs in this list.
 		'bullion-ops-article-disclaimer-css',
 		'bullion-ops-research-tile-css',
+		// v0.9.77. Both printed since v0.9.56 / v0.7.2 and missing from this list.
+		'bullion-ops-project-tiles',
+		'bullion-ops-project-faq-css',
 	] );
 } );
 
@@ -3683,6 +3686,21 @@ function bullion_ops_project_tiles_css() {
 		. "{$sel} .gallery-item-thumbnail-wrap img,"
 		. "{$sel} .eael-grid-fg-box .eael-grid-fg-img img{"
 		. "width:100%;height:100%;object-fit:cover;object-position:center;display:block;}"
+		// v0.9.77: the whole card is the link, and it says so on hover. EAEL
+		// links only the thumbnail; the caption is a sibling of that <a>, so a
+		// stretched ::after on the link (positioned against the card, which is
+		// already position:relative) makes the caption clickable too.
+		. "{$sel} .eael-gallery-grid-item{transition:transform .25s ease,box-shadow .25s ease;}"
+		. "{$sel} .eael-gallery-grid-item>a::after{content:'';position:absolute;inset:0;z-index:5;border-radius:inherit;}"
+		. "{$sel} .eael-gallery-grid-item>a:focus-visible::after{outline:3px solid #4CA565;outline-offset:-3px;}"
+		. "{$sel} .gallery-item-thumbnail-wrap img{transition:transform .5s ease;}"
+		. "{$sel} .gallery-item-caption-over::after{content:'View project \\2192';display:inline-block;margin-top:14px;"
+		. "font-family:Muli,sans-serif;font-size:14px;font-weight:600;color:#4CA565;transition:transform .25s ease;}"
+		. "{$sel} .eael-gallery-grid-item:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(20,41,52,.18);}"
+		. "{$sel} .eael-gallery-grid-item:hover .gallery-item-thumbnail-wrap img{transform:scale(1.05);}"
+		. "{$sel} .eael-gallery-grid-item:hover .gallery-item-caption-over::after{transform:translateX(4px);}"
+		. "@media (prefers-reduced-motion:reduce){{$sel} .eael-gallery-grid-item,{$sel} .gallery-item-thumbnail-wrap img{transition:none;}"
+		. "{$sel} .eael-gallery-grid-item:hover{transform:none;}{$sel} .eael-gallery-grid-item:hover .gallery-item-thumbnail-wrap img{transform:none;}}"
 		. "</style>\n";
 }
 add_action( 'wp_head', 'bullion_ops_project_tiles_css', 110 );
