@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.77
+ * Version: 0.9.78
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.77' );
+define( 'BULLION_OPS_VERSION', '0.9.78' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3690,7 +3690,13 @@ function bullion_ops_project_tiles_css() {
 		// links only the thumbnail; the caption is a sibling of that <a>, so a
 		// stretched ::after on the link (positioned against the card, which is
 		// already position:relative) makes the caption clickable too.
-		. "{$sel} .eael-gallery-grid-item{transition:transform .25s ease,box-shadow .25s ease;}"
+		// v0.9.78: the gallery container is overflow:hidden, which cropped the
+		// hover shadow to a hard edge; and a moving card lost the photo's rounded
+		// corners (overflow+radius does not clip a transformed child mid-transition
+		// in Safari/Chrome). isolation + a radius on the photo box itself fix that.
+		. ".eael-filter-gallery-container{overflow:visible !important;}"
+		. "{$sel} .eael-gallery-grid-item{transition:transform .25s ease,box-shadow .25s ease;isolation:isolate;}"
+		. "{$sel} .gallery-item-thumbnail-wrap{border-radius:20px 20px 0 0;isolation:isolate;}"
 		. "{$sel} .eael-gallery-grid-item>a::after{content:'';position:absolute;inset:0;z-index:5;border-radius:inherit;}"
 		. "{$sel} .eael-gallery-grid-item>a:focus-visible::after{outline:3px solid #4CA565;outline-offset:-3px;}"
 		. "{$sel} .gallery-item-thumbnail-wrap img{transition:transform .5s ease;}"
