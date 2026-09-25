@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.78
+ * Version: 0.9.79
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.78' );
+define( 'BULLION_OPS_VERSION', '0.9.79' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1433,7 +1433,7 @@ function bullion_ops_get_project_faq_data() {
 			'in_summary' => 'QMines has consolidated three Queensland copper and gold projects into a single district-scale portfolio, growing the combined resource base at each step and advancing Mt Chalmers toward a development decision through a fully funded DFS. The bigger opportunity is the vision beyond it: a centralised processing hub drawing on a wider district still to unlock.',
 			'faqs' => [
 				[ 'q' => 'How many projects does QMines have, and where are they?', 'a' => 'QMines holds three Queensland copper and gold projects, all within the same Central Queensland district near Rockhampton: Mt Chalmers, Develin Creek and Mt Mackenzie.' ],
-				[ 'q' => 'What is QMines\' Multi-Project Copper & Gold Production Hub?', 'a' => 'It is QMines\' vision for consolidating its three Queensland projects around a centralised processing plant. In its August 2026 investor presentations, QMines described a hub that could service several regional mines, producing 20-30ktpa of copper equivalent for more than ten years. This remains a vision-stage plan, not a committed development.' ],
+				[ 'q' => 'What is QMines\' Multi-Project Copper & Gold Production Hub?', 'a' => 'It is QMines\' vision for consolidating its three Queensland projects around a centralised processing plant that could service several regional mines, producing 20-30ktpa of copper equivalent for more than ten years.' ],
 				[ 'q' => 'Which QMines project is furthest advanced toward production?', 'a' => 'Mt Chalmers is the most advanced of the three. It is the only project with a declared Ore Reserve (9.6Mt Proved and Probable), has completed a Pre-Feasibility Study confirming a 10.4-year mine life, and is now progressing through a fully funded Definitive Feasibility Study, targeting production and cashflow within the next few years.' ],
 				[ 'q' => 'Are QMines\' three projects connected, or independent?', 'a' => 'Each project carries its own independently defined JORC resource. QMines\' longer-term thesis links them operationally, trucking ore from Develin Creek to a centralised Mt Chalmers processing facility, with Mt Mackenzie contributing further mineralisation to the same hub.' ],
 			],
