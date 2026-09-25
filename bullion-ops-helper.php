@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.75
+ * Version: 0.9.76
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.75' );
+define( 'BULLION_OPS_VERSION', '0.9.76' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1401,13 +1401,13 @@ function bullion_ops_get_project_faq_data() {
 			],
 		],
 		'develin-creek' => [
-			'in_summary' => 'Develin Creek is a high-grade copper and zinc project located approximately 90km west of Rockhampton, Queensland, acquired by QMines in September 2024. The project hosts a JORC resource of 4.13Mt at 1.37% copper equivalent for 56,581 tonnes of copper equivalent across several Volcanic Hosted Massive Sulphide deposits, with 70% of that resource in the Indicated category. Its proximity to the Mt Chalmers project positions Develin Creek as a satellite feed source for QMines\' Multi-Project Copper & Gold Production Hub.',
+			'in_summary' => 'Develin Creek is a high-grade copper and zinc project located approximately 90km west of Rockhampton, Queensland, acquired by QMines in September 2024. The project hosts a JORC resource of 4.70Mt at 0.94% copper and 1.0% zinc across several Volcanic Hosted Massive Sulphide deposits, with 90% of that resource in the Indicated category. Its proximity to the Mt Chalmers project positions Develin Creek as a satellite feed source for QMines\' Multi-Project Copper & Gold Production Hub.',
 			'faqs' => [
 				[ 'q' => 'Who owns the Develin Creek copper project?',          'a' => 'QMines Limited (ASX:QML) owns 100% of the Develin Creek copper-zinc project. QMines completed the acquisition from Zenith Minerals Limited on 30 September 2024. The project is located approximately 90km west of Rockhampton in Queensland.' ],
-				[ 'q' => 'What is the Develin Creek copper project?',           'a' => 'Develin Creek is a 100%-owned QMines copper-zinc project located approximately 90km west of Rockhampton, Queensland. It hosts a JORC Mineral Resource of 4.13Mt at 1.37% copper equivalent across several Volcanic Hosted Massive Sulphide (VHMS) deposits, with 70% of the resource in the Indicated category. Its proximity to QMines\' flagship Mt Chalmers project positions Develin Creek as a satellite feed source for the Multi-Project Copper & Gold Production Hub.' ],
+				[ 'q' => 'What is the Develin Creek copper project?',           'a' => 'Develin Creek is a 100%-owned QMines copper-zinc project located approximately 90km west of Rockhampton, Queensland. It hosts a JORC Mineral Resource of 4.70Mt at 0.94% copper and 1.0% zinc across several Volcanic Hosted Massive Sulphide (VHMS) deposits, with 90% of the resource in the Indicated category. Its proximity to QMines\' flagship Mt Chalmers project positions Develin Creek as a satellite feed source for the Multi-Project Copper & Gold Production Hub.' ],
 				[ 'q' => 'Where is the Develin Creek project located?',         'a' => 'Develin Creek is located approximately 90km west of Rockhampton in Queensland, Australia. The project covers EPM 17604 and EPM 16749, totalling 272km² of tenure.' ],
 				[ 'q' => 'What commodities does Develin Creek contain?',        'a' => 'Develin Creek contains copper, zinc, gold and silver mineralisation hosted in several Volcanic Hosted Massive Sulphide (VHMS) deposits, including the Sulphide City, Scorpion and Window deposits.' ],
-				[ 'q' => 'What is the JORC resource estimate for Develin Creek?', 'a' => 'The Develin Creek Resource stands at 4.13Mt at 1.37% CuEq for 56,581 tonnes of copper equivalent. 70% of this Resource sits in the Indicated JORC category.' ],
+				[ 'q' => 'What is the JORC resource estimate for Develin Creek?', 'a' => 'The Develin Creek Resource stands at 4.70Mt at 0.94% Cu and 1.0% Zn, containing approximately 44,200 tonnes of copper and 47,400 tonnes of zinc. 90% of this Resource sits in the Indicated JORC category.' ],
 				[ 'q' => 'When did QMines acquire Develin Creek?',              'a' => 'QMines completed the 100% acquisition of the Develin Creek copper and zinc project from Zenith Minerals Limited on 30 September 2024.' ],
 				[ 'q' => 'What is the strategic relationship between Develin Creek and Mt Chalmers?', 'a' => 'Develin Creek\'s proximity to QMines\' Mt Chalmers project creates potential for the combined development of both resources. QMines has identified this geographic relationship as a factor in its broader production hub strategy.' ],
 			],
@@ -1421,6 +1421,18 @@ function bullion_ops_get_project_faq_data() {
 				[ 'q' => 'What approvals and studies has Mt Mackenzie completed?', 'a' => 'Mt Mackenzie holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land. The project is currently undergoing further PFS-level work.' ],
 				[ 'q' => 'When did QMines acquire Mt Mackenzie?',               'a' => 'QMines acquired Mt Mackenzie from Resources and Energy Group in mid-2025.' ],
 				[ 'q' => 'How has the Mt Mackenzie resource grown since QMines acquired the project?', 'a' => 'Since acquiring the project, QMines has increased the Resource by 32% in contained gold and 30% in contained silver. The Resource now stands at 5.2Mt at 1.01g/t gold and 6.7g/t silver for 170,000 ounces of gold and 1.12 million ounces of silver, with approximately 70% of contained gold classified as Indicated.' ],
+			],
+		],
+		// /projects/ hub (page 11041). Approved copy from the Website Content DB,
+		// 25 Sep 2026. Hub-level questions only, distinct from the three project
+		// pages' own FAQs. Added v0.9.76.
+		'projects' => [
+			'in_summary' => 'QMines has consolidated three Queensland copper and gold projects into a single district-scale portfolio, growing the combined resource base at each step and advancing Mt Chalmers toward a development decision through a fully funded DFS. The bigger opportunity is the vision beyond it: a centralised processing hub drawing on a wider district still to unlock.',
+			'faqs' => [
+				[ 'q' => 'How many projects does QMines have, and where are they?', 'a' => 'QMines holds three Queensland copper and gold projects, all within the same Central Queensland district near Rockhampton: Mt Chalmers, Develin Creek and Mt Mackenzie.' ],
+				[ 'q' => 'What is QMines\' Multi-Project Copper & Gold Production Hub?', 'a' => 'It is QMines\' vision for consolidating its three Queensland projects around a centralised processing plant. In its August 2026 investor presentations, QMines described a hub that could service several regional mines, producing 20-30ktpa of copper equivalent for more than ten years. This remains a vision-stage plan, not a committed development.' ],
+				[ 'q' => 'Which QMines project is furthest advanced toward production?', 'a' => 'Mt Chalmers is the most advanced of the three. It is the only project with a declared Ore Reserve (9.6Mt Proved and Probable), has completed a Pre-Feasibility Study confirming a 10.4-year mine life, and is now progressing through a fully funded Definitive Feasibility Study, targeting production and cashflow within the next few years.' ],
+				[ 'q' => 'Are QMines\' three projects connected, or independent?', 'a' => 'Each project carries its own independently defined JORC resource. QMines\' longer-term thesis links them operationally, trucking ore from Develin Creek to a centralised Mt Chalmers processing facility, with Mt Mackenzie contributing further mineralisation to the same hub.' ],
 			],
 		],
 		// Cluster post under the /is-copper-a-good-investment/ pillar. FAQPage
