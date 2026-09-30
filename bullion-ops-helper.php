@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.79
+ * Version: 0.9.80
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.79' );
+define( 'BULLION_OPS_VERSION', '0.9.80' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3657,6 +3657,47 @@ function bullion_ops_jsonld_ob_end() {
 		$GLOBALS['bullion_ops_jsonld_ob_level'] = null;
 	}
 }
+
+// --- /environment/ hero loads first on every device (v0.9.80) ---------------
+//
+// Mobile PSI was 74-79 with LCP 4.4-5.6s. The hero is an Elementor section
+// background, and WP Rocket's CSS-background LazyLoad marked it
+// data-rocket-lazy-bg, so the browser did not even request it until the lazy
+// script ran: 2.5s of "resource load delay" before a byte moved. Two fixes:
+//  1. Exclude this one file from LazyLoad (rocket_lazyload_excluded_src also
+//     feeds the CSS-background exclusions). Specific filename, not a keyword.
+//  2. Preload the right file per breakpoint, so it is requested with the HTML.
+//     Elementor's mobile breakpoint is 767px; the mobile file is a 900px
+//     WebP set as the section's background_image_mobile (2026-10-01).
+// Any other hero that becomes the LCP element can be added to $heroes.
+
+function bullion_ops_lcp_heroes() {
+	return [
+		'environment' => [
+			'desktop' => '/uploads/2026/09/qmines-environmental-monitoring-station-queensland.jpg.webp',
+			'mobile'  => '/uploads/2026/10/qmines-environmental-monitoring-station-queensland-mobile.webp',
+		],
+	];
+}
+
+add_filter( 'rocket_lazyload_excluded_src', function ( $excluded ) {
+	foreach ( bullion_ops_lcp_heroes() as $files ) {
+		foreach ( $files as $path ) {
+			$excluded[] = basename( $path );
+		}
+	}
+	return $excluded;
+} );
+
+add_action( 'wp_head', function () {
+	foreach ( bullion_ops_lcp_heroes() as $slug => $files ) {
+		if ( ! is_page( $slug ) ) {
+			continue;
+		}
+		printf( "\n<link rel=\"preload\" as=\"image\" href=\"%s\" media=\"(max-width: 767px)\" fetchpriority=\"high\">", esc_url( content_url( $files['mobile'] ) ) );
+		printf( "\n<link rel=\"preload\" as=\"image\" href=\"%s\" media=\"(min-width: 768px)\" fetchpriority=\"high\">\n", esc_url( content_url( $files['desktop'] ) ) );
+	}
+}, 1 );
 
 // --- /projects/ tile images fill their box (v0.9.56) -----------------------
 //
