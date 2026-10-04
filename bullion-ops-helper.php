@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.80
+ * Version: 0.9.81
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.80' );
+define( 'BULLION_OPS_VERSION', '0.9.81' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -643,6 +643,8 @@ add_filter( 'rocket_rucss_inline_atts_exclusions', function( $exclusions ) {
 		// v0.9.77. Both printed since v0.9.56 / v0.7.2 and missing from this list.
 		'bullion-ops-project-tiles',
 		'bullion-ops-project-faq-css',
+		// v0.9.81.
+		'bullion-ops-news-media-tiles',
 	] );
 } );
 
@@ -3751,6 +3753,30 @@ function bullion_ops_project_tiles_css() {
 		. "</style>\n";
 }
 add_action( 'wp_head', 'bullion_ops_project_tiles_css', 110 );
+
+// --- /news-media/ tile thumbnails: uniform 16:9 (v0.9.81) -------------------
+//
+// The scraper's gallery takes each article's featured image at its natural
+// shape. Stockhead and Mining.com.au send 16:9; IndustryQLD sends near-square
+// PNGs, so those tiles stood about 40% taller and the grid read as ragged.
+// Operator, 2026-10-05: keep masonry, make the thumbnails uniform. So this
+// pins the thumbnail box only; card heights still vary with title length.
+//
+// Plugin, not page CSS: the scraper rewrites page 14246's _elementor_data
+// twice a day, and page-level custom CSS is not durable anyway (§I trap 29).
+
+function bullion_ops_news_media_tiles_css() {
+	if ( ! is_page( 'news-media' ) ) {
+		return;
+	}
+	$w = '.eael-filterable-gallery-item-wrap .gallery-item-thumbnail-wrap';
+	echo "\n<style id=\"bullion-ops-news-media-tiles\">"
+		. "{$w}{aspect-ratio:16/9;overflow:hidden;}"
+		. "{$w}>picture{display:block;width:100%;height:100%;}"
+		. "{$w}>img,{$w}>picture>img{display:block;width:100%;height:100%;object-fit:cover;object-position:center;}"
+		. "</style>\n";
+}
+add_action( 'wp_head', 'bullion_ops_news_media_tiles_css', 110 );
 
 // --- Duplicate <h1> on pillar / cluster pages (v0.9.55) --------------------
 //
