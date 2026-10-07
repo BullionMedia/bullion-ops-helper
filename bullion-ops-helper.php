@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.81
+ * Version: 0.9.82
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.81' );
+define( 'BULLION_OPS_VERSION', '0.9.82' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -645,6 +645,8 @@ add_filter( 'rocket_rucss_inline_atts_exclusions', function( $exclusions ) {
 		'bullion-ops-project-faq-css',
 		// v0.9.81.
 		'bullion-ops-news-media-tiles',
+		// v0.9.82.
+		'bullion-ops-mobile-menu-offset',
 	] );
 } );
 
@@ -3777,6 +3779,28 @@ function bullion_ops_news_media_tiles_css() {
 		. "</style>\n";
 }
 add_action( 'wp_head', 'bullion_ops_news_media_tiles_css', 110 );
+
+// --- Mobile hamburger menu: panel shifted 20px left (v0.9.82) ---------------
+//
+// The header's UAEL nav menu opens a full-width panel on mobile. UAEL sets the
+// panel's inline `left` to minus the offset of `.uael-nav-menu`, but the panel's
+// containing block is the widget element, which sits 20px further left because
+// `.elementor-widget-container` carries 20px of left padding. Net result: the
+// panel hung 20px off the left edge and cut the first letter off every item
+// ("OME", "BOUT"). Measured 2026-10-07 at 320, 390 and 412px wide, always -20px.
+// Surfaced right after the Elementor update that day.
+//
+// Making `.uael-nav-menu` the containing block lines UAEL's maths up with the
+// box it is actually measured against. Verified: panel at x=0, full viewport
+// width, flush under the header, on all three widths and on two templates.
+// Scoped to UAEL's mobile breakpoint so desktop dropdowns are untouched.
+
+function bullion_ops_mobile_menu_offset_css() {
+	echo "\n<style id=\"bullion-ops-mobile-menu-offset\">"
+		. "@media (max-width:767px){.elementor-widget-uael-nav-menu .uael-nav-menu{position:relative;}}"
+		. "</style>\n";
+}
+add_action( 'wp_head', 'bullion_ops_mobile_menu_offset_css', 110 );
 
 // --- Duplicate <h1> on pillar / cluster pages (v0.9.55) --------------------
 //
