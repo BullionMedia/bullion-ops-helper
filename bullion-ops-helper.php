@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.82
+ * Version: 0.9.83
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.82' );
+define( 'BULLION_OPS_VERSION', '0.9.83' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3801,6 +3801,33 @@ function bullion_ops_mobile_menu_offset_css() {
 		. "</style>\n";
 }
 add_action( 'wp_head', 'bullion_ops_mobile_menu_offset_css', 110 );
+
+// --- Mobile hamburger dead on Safari: Delay JS split Elementor (v0.9.83) -----
+//
+// After the 2026-10-07 Elementor update, WP Rocket's Delay JavaScript held back
+// SOME of Elementor's boot chain and let the rest run immediately:
+//   delayed:  webpack.runtime, the inline elementorFrontendConfig,
+//             webpack-pro.runtime, ElementorProFrontendConfig, elements-handlers
+//   ran now:  frontend-modules, frontend.min, elementor-pro frontend.min, UAEL
+// frontend.min.js then ran with no config ("Can't find variable:
+// elementorFrontendConfig"), Elementor never initialised, and the UAEL menu
+// toggle was never wired up. On WebKit (every iPhone browser) the tap did
+// nothing at all. Chrome's phone emulation happened to recover, which is why the
+// first check passed.
+//
+// Fix: exclude exactly the five delayed pieces, so the whole chain runs in
+// order. Specific paths and config names only, per the standing rule against
+// broad keywords like "elementor" (docs/context/feedback/wp-rocket-exclusions.md).
+
+add_filter( 'rocket_delay_js_exclusions', function( $exclusions ) {
+	return array_merge( (array) $exclusions, [
+		'elementor/assets/js/webpack.runtime',
+		'elementorFrontendConfig',
+		'elementor-pro/assets/js/webpack-pro.runtime',
+		'ElementorProFrontendConfig',
+		'elementor-pro/assets/js/elements-handlers',
+	] );
+} );
 
 // --- Duplicate <h1> on pillar / cluster pages (v0.9.55) --------------------
 //
