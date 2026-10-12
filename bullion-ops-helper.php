@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.83
+ * Version: 0.9.84
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.83' );
+define( 'BULLION_OPS_VERSION', '0.9.84' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2544,7 +2544,13 @@ function bullion_ops_inject_toc_speakable_jsonld() {
 		'@id'       => trailingslashit( get_permalink() ) . '#webpage',
 		'speakable' => [
 			'@type'       => 'SpeakableSpecification',
-			'cssSelector' => [ '.bullion-ops-toc', '.entry-content > p:first-of-type' ],
+			// v0.9.84: was '.entry-content > p:first-of-type', which matched
+			// NOTHING on any article (verified in a browser 2026-10-12): the
+			// article template has no .entry-content. The body is
+			// .page-content > .asx-article-wrapper, whose first direct <p> is the
+			// opening answer paragraph (the byline sits inside .asx-article-header,
+			// so it cannot match). Checked on all four pillar/cluster pages.
+			'cssSelector' => [ '.bullion-ops-toc', '.asx-article-wrapper > p:first-of-type' ],
 		],
 	];
 	echo "\n<script type=\"application/ld+json\">"
