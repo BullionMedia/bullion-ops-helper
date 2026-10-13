@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.84
+ * Version: 0.9.85
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.84' );
+define( 'BULLION_OPS_VERSION', '0.9.85' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -647,6 +647,8 @@ add_filter( 'rocket_rucss_inline_atts_exclusions', function( $exclusions ) {
 		'bullion-ops-news-media-tiles',
 		// v0.9.82.
 		'bullion-ops-mobile-menu-offset',
+		// v0.9.85.
+		'bullion-ops-home-mobile-hero',
 	] );
 } );
 
@@ -3807,6 +3809,58 @@ function bullion_ops_mobile_menu_offset_css() {
 		. "</style>\n";
 }
 add_action( 'wp_head', 'bullion_ops_mobile_menu_offset_css', 110 );
+
+// --- Homepage hero: first slide only on phones (v0.9.85) --------------------
+//
+// The homepage hero column (Elementor id 3b7b595) runs a four-image background
+// slideshow. Once the iPhone fix (v0.9.83) let it actually run on phones, each
+// new slide registered as a fresh Largest Contentful Paint, so Lighthouse kept
+// timing until the last slide: mobile LCP 16-20s, score 39-54. Operator,
+// 2026-10-14: first image only on mobile; desktop keeps the slideshow.
+//
+// Below 768px the slideshow is hidden and the column gets the gallery's FIRST
+// image as a plain cover background. Read from the page's own Elementor data,
+// so swapping the first slide in the editor changes the phone image too, and
+// dev/live upload paths never need hardcoding. Hidden slides are never
+// fetched (their backgrounds sit under display:none): verified in a phone
+// emulation, 1 hero image requested instead of 4.
+
+function bullion_ops_home_mobile_hero_css() {
+	if ( ! is_front_page() ) {
+		return;
+	}
+	$raw  = get_post_meta( (int) get_option( 'page_on_front' ), '_elementor_data', true );
+	$data = is_string( $raw ) ? json_decode( $raw, true ) : $raw;
+	if ( ! is_array( $data ) ) {
+		return;
+	}
+	$url  = '';
+	$walk = function ( $nodes ) use ( &$walk, &$url ) {
+		foreach ( (array) $nodes as $n ) {
+			if ( $url ) {
+				return;
+			}
+			if ( isset( $n['id'] ) && '3b7b595' === $n['id'] ) {
+				$url = $n['settings']['background_slideshow_gallery'][0]['url'] ?? '';
+				return;
+			}
+			if ( ! empty( $n['elements'] ) ) {
+				$walk( $n['elements'] );
+			}
+		}
+	};
+	$walk( $data );
+	if ( ! $url ) {
+		return;
+	}
+	$sel = '.elementor-element-3b7b595';
+	echo "\n<style id=\"bullion-ops-home-mobile-hero\">@media (max-width:767px){"
+		. "{$sel} .elementor-background-slideshow{display:none!important;}"
+		. "{$sel}>.elementor-element-populated{background-image:url(" . esc_url( $url ) . ");"
+		. "background-size:cover;background-position:center center;background-repeat:no-repeat;}"
+		. "}</style>\n";
+}
+add_action( 'wp_head', 'bullion_ops_home_mobile_hero_css', 110 );
 
 // --- Mobile hamburger dead on Safari: Delay JS split Elementor (v0.9.83) -----
 //
