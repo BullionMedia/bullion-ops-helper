@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.86
+ * Version: 0.9.87
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.86' );
+define( 'BULLION_OPS_VERSION', '0.9.87' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1320,6 +1320,8 @@ function bullion_ops_inject_project_faq_css() {
 .bullion-ops-project-faq details p {
   margin:12px 0 0;font-size:15px;line-height:1.6;color:#3a4a52;
 }
+.bullion-ops-project-faq details p a,
+.bullion-ops-project-summary p a {color:#4CA565;text-decoration:underline;}
 @media (max-width:600px) {
   .bullion-ops-project-summary,
   .bullion-ops-project-faq {padding:0 16px;margin:24px auto}
@@ -1357,7 +1359,7 @@ function bullion_ops_project_faq_shortcode( $atts = [] ) {
 function bullion_ops_render_project_faq_html( $page ) {
 	$out  = "\n<section class=\"bullion-ops-project-summary\">";
 	$out .= '<h2>In Summary</h2>';
-	$out .= '<p>' . esc_html( $page['in_summary'] ) . '</p>';
+	$out .= '<p>' . wp_kses( $page['in_summary'], [ 'a' => [ 'href' => [] ] ] ) . '</p>';
 	$out .= "</section>\n";
 
 	$out .= '<section class="bullion-ops-project-faq">';
@@ -1365,7 +1367,7 @@ function bullion_ops_render_project_faq_html( $page ) {
 	foreach ( $page['faqs'] as $faq ) {
 		$out .= '<details>';
 		$out .= '<summary>' . esc_html( $faq['q'] ) . '</summary>';
-		$out .= '<p>' . esc_html( $faq['a'] ) . '</p>';
+		$out .= '<p>' . wp_kses( $faq['a'], [ 'a' => [ 'href' => [] ] ] ) . '</p>';
 		$out .= '</details>';
 	}
 	$out .= "</section>\n";
@@ -1380,7 +1382,7 @@ function bullion_ops_render_project_faq_jsonld( $page ) {
 			'name'           => $faq['q'],
 			'acceptedAnswer' => [
 				'@type' => 'Answer',
-				'text'  => $faq['a'],
+				'text'  => wp_strip_all_tags( $faq['a'] ),
 			],
 		];
 	}
@@ -1490,13 +1492,16 @@ function bullion_ops_get_project_faq_data() {
 			if ( ! empty( $qa['q'] ) && ! empty( $qa['a'] ) ) {
 				$pairs[] = [
 					'q' => wp_strip_all_tags( $qa['q'] ),
-					'a' => wp_strip_all_tags( $qa['a'] ),
+					// v0.9.87: answers may carry plain <a href> links (the
+					// /investors/ FAQ links the pages it names). Visible HTML keeps
+					// them; the JSON-LD renderer strips them.
+					'a' => wp_kses( (string) $qa['a'], [ 'a' => [ 'href' => [] ] ] ),
 				];
 			}
 		}
 		if ( $pairs ) {
 			$map[ sanitize_title( $slug ) ] = [
-				'in_summary' => wp_strip_all_tags( (string) ( $entry['in_summary'] ?? '' ) ),
+				'in_summary' => wp_kses( (string) ( $entry['in_summary'] ?? '' ), [ 'a' => [ 'href' => [] ] ] ),
 				'faqs'       => $pairs,
 			];
 		}
