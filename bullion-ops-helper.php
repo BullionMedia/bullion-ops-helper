@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.85
+ * Version: 0.9.86
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.85' );
+define( 'BULLION_OPS_VERSION', '0.9.86' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3861,6 +3861,23 @@ function bullion_ops_home_mobile_hero_css() {
 		. "}</style>\n";
 }
 add_action( 'wp_head', 'bullion_ops_home_mobile_hero_css', 110 );
+
+// --- /our-team/ photos: real slot size in `sizes` (v0.9.86) -----------------
+//
+// WordPress described every team photo as "(max-width: 1080px) 100vw, 1080px",
+// so a phone downloaded the 1080px file for a slot that is 154px wide (274px on
+// desktop, 144px on tablet). PSI flagged it twice (audits 2026-10-14 and -15).
+// Not fixed by shrinking the files: the operator's photos must stay sharp on
+// high-density screens. Telling the browser the true slot lets each device pick
+// the smallest file that is still sharp for its pixel density. Slot widths
+// measured 2026-10-15 at 1440 / 900 / 390px viewports.
+
+add_filter( 'wp_get_attachment_image_attributes', function( $attr ) {
+	if ( is_page( 'our-team' ) && ! empty( $attr['srcset'] ) ) {
+		$attr['sizes'] = '(max-width: 767px) 160px, (max-width: 1024px) 150px, 280px';
+	}
+	return $attr;
+}, 20 );
 
 // --- Mobile hamburger dead on Safari: Delay JS split Elementor (v0.9.83) -----
 //
