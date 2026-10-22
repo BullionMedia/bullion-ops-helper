@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.88
+ * Version: 0.9.89
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.88' );
+define( 'BULLION_OPS_VERSION', '0.9.89' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -492,6 +492,16 @@ add_action( 'save_post_asx_announcement', function( $post_id ) {
 		return;
 	}
 	bullion_ops_sitemap_flush( 'asx_announcement' );
+}, 20 );
+
+// Pages too (v0.9.89). Without this the page sitemap sat on a 14 Sep cache for
+// five weeks: it still listed /environmental/ after the slug became
+// /environment/, and Search Console flagged it as "Page with redirect".
+add_action( 'save_post_page', function( $post_id ) {
+	if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+		return;
+	}
+	bullion_ops_sitemap_flush( 'page' );
 }, 20 );
 
 // GET,POST — the WAF 403s POST to this namespace, so GET is what works from
