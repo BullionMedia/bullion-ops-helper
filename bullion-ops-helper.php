@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.89
+ * Version: 0.9.90
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.89' );
+define( 'BULLION_OPS_VERSION', '0.9.90' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -3048,7 +3048,15 @@ function bullion_ops_get_insights_visual_text( $slug, $title = '' ) {
 	if ( '' === $title ) {
 		return '';
 	}
+	// Lead = up to the first colon, or through the first question mark,
+	// whichever comes first. v0.9.90: "What Is a JORC Resource? A Plain-English
+	// Guide..." has no colon, so the whole 64-char title fell past the length
+	// guard and the card shipped with a blank overlay (23 Oct 2026).
 	$lead = trim( explode( ':', $title, 2 )[0] );
+	$q    = strpos( $lead, '?' );
+	if ( false !== $q ) {
+		$lead = substr( $lead, 0, $q + 1 );
+	}
 	// A lead that long would wrap badly over the thumbnail — better no
 	// overlay than a broken one.
 	return ( '' !== $lead && strlen( $lead ) <= 40 ) ? $lead : '';
