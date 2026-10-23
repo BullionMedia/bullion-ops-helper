@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.90
+ * Version: 0.9.91
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.90' );
+define( 'BULLION_OPS_VERSION', '0.9.91' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1409,12 +1409,12 @@ function bullion_ops_render_project_faq_jsonld( $page ) {
 function bullion_ops_get_project_faq_data() {
 	$map = [
 		'mt-chalmers' => [
-			'in_summary' => 'Mt Chalmers is QMines\' flagship development project, a high-grade copper-gold deposit 17km from Rockhampton with a completed Pre-Feasibility Study, five resource upgrades in under three years, and a current JORC resource of 11.86Mt at 1.22% copper equivalent. The project\'s shallow open-pit geometry, proximity to established infrastructure, and 316km² of tenure underpin QMines\' strategy of transitioning Mt Chalmers toward production. With 84% of resources in the Measured and Indicated JORC categories, Mt Chalmers represents the company\'s most advanced asset and its primary value-creation pathway.',
+			'in_summary' => 'Mt Chalmers is QMines\' flagship development project, a high-grade copper-gold deposit 17km from Rockhampton with a completed Pre-Feasibility Study, five resource upgrades in under three years, and a current <a href="/is-copper-a-good-investment/what-is-a-jorc-resource/">JORC resource</a> of 11.86Mt at 1.22% copper equivalent. The project\'s shallow open-pit geometry, proximity to established infrastructure, and 316km² of tenure underpin QMines\' strategy of transitioning Mt Chalmers toward production. With 84% of resources in the Measured and Indicated JORC categories, Mt Chalmers represents the company\'s most advanced asset and its primary value-creation pathway.',
 			'faqs' => [
 				[ 'q' => 'What is the Mt Chalmers copper-gold project?',        'a' => 'The Mt Chalmers copper-gold project is QMines\' flagship development asset in Central Queensland, located 17km north-east of Rockhampton. It is a past-producing high-grade copper and gold mine that operated between 1898 and 1982, now being redeveloped by QMines with a completed Pre-Feasibility Study, a declared Ore Reserve, and a Definitive Feasibility Study underway. The project holds a current JORC resource of 11.86Mt at 1.22% copper equivalent and forms the processing centre of QMines\' Multi-Project Copper & Gold Production Hub.' ],
 				[ 'q' => 'Where is Mt Chalmers located?',                       'a' => 'Mt Chalmers is located 17km north-east of Rockhampton in Queensland, Australia. QMines holds 316km² of tenure at the project.' ],
 				[ 'q' => 'What copper and gold does Mt Chalmers contain?',      'a' => 'Mt Chalmers contains copper, gold, zinc, silver, and pyrite mineralisation. The Pre-Feasibility Study defined a contained metal inventory of 65,000 tonnes of copper, 160,000 ounces of gold, 30,600 tonnes of zinc, 1.8 million ounces of silver, and 583,000 tonnes of pyrite.' ],
-				[ 'q' => 'What is the JORC resource at Mt Chalmers?',           'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.86Mt at 1.22% contained copper equivalent. 84% of these Resources fall in the Measured and Indicated JORC categories, reflecting five resource upgrades completed in under three years.' ],
+				[ 'q' => 'What is the JORC resource at Mt Chalmers?',           'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.86Mt at 1.22% contained copper equivalent. 84% of these Resources fall in the Measured and Indicated <a href="/is-copper-a-good-investment/what-is-a-jorc-resource/">JORC categories</a>, reflecting five resource upgrades completed in under three years.' ],
 				[ 'q' => 'What did the Mt Chalmers Pre-Feasibility Study find?', 'a' => 'The Pre-Feasibility Study returned a pre-tax Net Present Value (NPV8) of $373 million and a 54% Internal Rate of Return, based on a stand-alone 1Mtpa processing plant with a 10.4 year initial mine life and a capital cost estimate of A$191 million. The study also declared a maiden Ore Reserve of 9.6Mt (Proved and Probable).' ],
 				[ 'q' => 'When is the Mt Chalmers DFS due?',                    'a' => 'The Definitive Feasibility Study (DFS) for Mt Chalmers is currently underway. QMines announced a fully-funded DFS delivery program in 2026 and has committed to delivering the DFS results later that year. Updates are released via the ASX as the program progresses.' ],
 				[ 'q' => 'What stage of development is Mt Chalmers at?',        'a' => 'Mt Chalmers is in the development phase with a completed Pre-Feasibility Study, declared Ore Reserve, and a Definitive Feasibility Study underway. QMines\' strategy involves transitioning the project toward production, leveraging its shallow high-grade open-pit geometry, coastal proximity, and existing infrastructure access.' ],
@@ -1434,11 +1434,11 @@ function bullion_ops_get_project_faq_data() {
 			],
 		],
 		'mt-mackenzie' => [
-			'in_summary' => 'Mt Mackenzie is a 100%-owned gold and silver project located approximately 140km northwest of Rockhampton, Queensland, carrying a JORC Mineral Resource of 5.2Mt at 1.01g/t gold and 6.7g/t silver for 170,000 ounces of gold and 1.12 million ounces of silver. The project holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land, supporting its near-term development potential. Located 45km from Develin Creek, Mt Mackenzie forms part of QMines\' Multi-Project Copper &amp; Gold Production Hub in Central Queensland.',
+			'in_summary' => 'Mt Mackenzie is a 100%-owned gold and silver project located approximately 140km northwest of Rockhampton, Queensland, carrying a <a href="/is-copper-a-good-investment/what-is-a-jorc-resource/">JORC Mineral Resource</a> of 5.2Mt at 1.01g/t gold and 6.7g/t silver for 170,000 ounces of gold and 1.12 million ounces of silver. The project holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land, supporting its near-term development potential. Located 45km from Develin Creek, Mt Mackenzie forms part of QMines\' Multi-Project Copper &amp; Gold Production Hub in Central Queensland.',
 			'faqs' => [
 				[ 'q' => 'Where is the Mt Mackenzie project located?',          'a' => 'Mt Mackenzie is located approximately 140km northwest of Rockhampton in Queensland, Australia, and approximately 45km from QMines\' Develin Creek project.' ],
 				[ 'q' => 'What commodities does Mt Mackenzie contain?',         'a' => 'Mt Mackenzie is a gold and silver project, with shallow high-grade oxide and primary mineralisation suited to open-pit mining.' ],
-				[ 'q' => 'What is the JORC resource estimate for Mt Mackenzie?', 'a' => 'The Mt Mackenzie Mineral Resource Estimate stands at 5.2Mt at 1.01g/t gold and 6.7g/t silver, for 170,000 ounces of gold and approximately 1.12 million ounces of silver. Approximately 70% of the contained gold is classified in the Indicated JORC category, and the deposit remains open along strike and at depth.' ],
+				[ 'q' => 'What is the JORC resource estimate for Mt Mackenzie?', 'a' => 'The Mt Mackenzie Mineral Resource Estimate stands at 5.2Mt at 1.01g/t gold and 6.7g/t silver, for 170,000 ounces of gold and approximately 1.12 million ounces of silver. Approximately 70% of the contained gold is classified in the Indicated <a href="/is-copper-a-good-investment/what-is-a-jorc-resource/">JORC category</a>, and the deposit remains open along strike and at depth.' ],
 				[ 'q' => 'What approvals and studies has Mt Mackenzie completed?', 'a' => 'Mt Mackenzie holds a granted Mining Development Licence (MDL 2008), a completed Scoping Study, and freehold land. The project is currently undergoing further PFS-level work.' ],
 				[ 'q' => 'When did QMines acquire Mt Mackenzie?',               'a' => 'QMines acquired Mt Mackenzie from Resources and Energy Group in mid-2025.' ],
 				[ 'q' => 'How has the Mt Mackenzie resource grown since QMines acquired the project?', 'a' => 'Since acquiring the project, QMines has increased the Resource by 32% in contained gold and 30% in contained silver. The Resource now stands at 5.2Mt at 1.01g/t gold and 6.7g/t silver for 170,000 ounces of gold and 1.12 million ounces of silver, with approximately 70% of contained gold classified as Indicated.' ],
