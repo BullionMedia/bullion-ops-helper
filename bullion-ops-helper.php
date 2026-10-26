@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.94
+ * Version: 0.9.95
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.94' );
+define( 'BULLION_OPS_VERSION', '0.9.95' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1196,6 +1196,23 @@ function bullion_ops_muli_font_face_woff2( $value, $object_id, $meta_key, $singl
 	return $single ? $css : [ $css ];
 }
 
+// v0.9.95. The filter above was not enough: when Elementor Pro writes a
+// page's CSS file it takes `font_face` from its fonts cache option
+// (custom-fonts.php:576), not from the font post's meta. Rewrite it there too.
+add_filter( 'option_elementor_fonts_manager_fonts', 'bullion_ops_muli_fonts_option_woff2' );
+
+function bullion_ops_muli_fonts_option_woff2( $fonts ) {
+	if ( ! is_array( $fonts ) ) {
+		return $fonts;
+	}
+	array_walk_recursive( $fonts, function ( &$v, $k ) {
+		if ( 'font_face' === $k ) {
+			$v = bullion_ops_muli_css_to_woff2( $v );
+		}
+	} );
+	return $fonts;
+}
+
 // The theme's Additional CSS (Customizer, post 9534 on live) carries its own
 // Muli .ttf @font-face rules too. Same rewrite.
 add_filter( 'wp_get_custom_css', 'bullion_ops_muli_css_to_woff2' );
@@ -1228,11 +1245,11 @@ function bullion_ops_muli_css_to_woff2( $css ) {
 // One-off: clear Elementor's generated CSS so every page rebuilds with the
 // WOFF2 rules above. Runs once per site.
 add_action( 'init', function () {
-	if ( '1' === get_option( 'bullion_ops_muli_css_cleared' ) || ! class_exists( '\Elementor\Plugin' ) ) {
+	if ( '2' === get_option( 'bullion_ops_muli_css_cleared' ) || ! class_exists( '\Elementor\Plugin' ) ) {
 		return;
 	}
 	\Elementor\Plugin::$instance->files_manager->clear_cache();
-	update_option( 'bullion_ops_muli_css_cleared', '1' );
+	update_option( 'bullion_ops_muli_css_cleared', '2' );
 }, 99 );
 
 // --- Font + script perf trial, DEV ONLY (v0.9.58) --------------------------
