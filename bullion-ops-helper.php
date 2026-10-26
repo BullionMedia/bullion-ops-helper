@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.92
+ * Version: 0.9.93
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.92' );
+define( 'BULLION_OPS_VERSION', '0.9.93' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4763,3 +4763,31 @@ add_filter( 'robots_txt', function( $output, $public ) {
 	}
 	return "User-agent: *\n" . $extra . "\n" . $output;
 }, 99, 2 );
+
+// --- JORC DefinedTerm schema on the three project pages (v0.9.93, 2026-10-27)
+//
+// Strategist proposal 2026-09-06 (Inbox row 3d3a17c9): all three project pages
+// say "JORC Mineral Resource" / "JORC category" and none defines the term, in
+// prose or schema. Same definition on all three: it defines the Code, not a
+// resource figure, so it never needs updating when an estimate changes. Points
+// at the JORC explainer published 2026-10-23. Scoped by slug, because page IDs
+// differ between dev and live.
+add_action( 'wp_head', function() {
+	if ( ! is_page( [ 'mt-chalmers', 'develin-creek', 'mt-mackenzie' ] ) ) {
+		return;
+	}
+	$explainer = home_url( '/is-copper-a-good-investment/what-is-a-jorc-resource/' );
+	$schema    = [
+		'@context'         => 'https://schema.org',
+		'@type'            => 'DefinedTerm',
+		'name'             => 'JORC Code',
+		'alternateName'    => 'JORC Mineral Resource',
+		'description'      => 'The Australasian Code for Reporting of Exploration Results, Mineral Resources and Ore Reserves (JORC Code) is the standard ASX-listed mining companies use to classify and publicly report Mineral Resources and Ore Reserves. Mineral Resources are split into Inferred, Indicated and Measured categories by increasing geological confidence.',
+		'url'              => $explainer,
+		'inDefinedTermSet' => [
+			'@type' => 'DefinedTermSet',
+			'name'  => 'QMines Mining Glossary',
+		],
+	];
+	echo "<script type=\"application/ld+json\">" . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "</script>\n";
+}, 30 );
