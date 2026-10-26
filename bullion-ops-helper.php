@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.91
+ * Version: 0.9.92
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.91' );
+define( 'BULLION_OPS_VERSION', '0.9.92' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4735,3 +4735,31 @@ function bullion_ops_inject_research_tile_css() {
 </style>
 	<?php
 }
+
+// --- Search Console 404 noise (v0.9.92, 2026-10-26) -------------------------
+//
+// 1. WordPress core (6.8+) prints a speculation-rules script on every page
+//    whose exclusion list is URL patterns ("/wp-content/plugins/*", "/wp-*.php",
+//    "/*\?(.+)"). Googlebot read those patterns as links and reported each one
+//    as a 404 page, 8 of the 17 in the Not found report on 26 Oct 2026, and
+//    "Validate fix" can never pass on them. QMines' rules were "conservative"
+//    (prefetch on click only), so the speed cost of dropping them is negligible.
+add_filter( 'wp_speculation_rules_configuration', '__return_null' );
+
+// 2. Keep crawlers out of Elementor template previews (?elementor_library=...)
+//    and Cloudflare's email-obfuscation endpoint. Neither is a public page.
+//    Priority 99 so it appends after Rank Math's own robots.txt output.
+add_filter( 'robots_txt', function( $output, $public ) {
+	if ( ! $public ) {
+		return $output;
+	}
+	$extra = "Disallow: /*?elementor_library=\nDisallow: /cdn-cgi/\n";
+	if ( false !== strpos( $output, 'elementor_library' ) ) {
+		return $output;
+	}
+	// Insert into the first User-agent: * group, before any Sitemap line.
+	if ( preg_match( '/^(User-agent:\s*\*\s*\n(?:(?!User-agent:|Sitemap:).*\n)*)/mi', $output, $m ) ) {
+		return str_replace( $m[1], rtrim( $m[1] ) . "\n" . $extra . "\n", $output );
+	}
+	return "User-agent: *\n" . $extra . "\n" . $output;
+}, 99, 2 );
