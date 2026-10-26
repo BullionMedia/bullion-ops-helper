@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.93
+ * Version: 0.9.94
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.93' );
+define( 'BULLION_OPS_VERSION', '0.9.94' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1165,6 +1165,75 @@ function bullion_ops_inject_muli_woff2() {
 	}
 	echo "</style>\n";
 }
+
+// --- Muli WOFF2 at the source: Elementor's cached font CSS (v0.9.94) -------
+//
+// The override above and the strip below only reach inline HTML. Elementor Pro
+// also writes its Muli @font-face set, TTF only, into the external per-page CSS
+// files (post-16.css for the kit, post-<id>.css per page). RUCSS lazy-loads
+// those after our WOFF2 block, so on live /research/ still fetched
+// Muli-SemiBold.ttf (Oct 2026, mobile PSI 71).
+//
+// Elementor Pro builds those rules from the font post's cached
+// `elementor_font_face` meta. Rewrite each Muli src there to the bundled WOFF2
+// for the same weight, so every regenerated CSS file serves WOFF2 and no page
+// references a .ttf at all. Same weight map as the override above.
+add_filter( 'get_post_metadata', 'bullion_ops_muli_font_face_woff2', 10, 4 );
+
+function bullion_ops_muli_font_face_woff2( $value, $object_id, $meta_key, $single ) {
+	if ( 'elementor_font_face' !== $meta_key ) {
+		return $value;
+	}
+	remove_filter( 'get_post_metadata', 'bullion_ops_muli_font_face_woff2', 10 );
+	$css = get_post_meta( $object_id, 'elementor_font_face', true );
+	add_filter( 'get_post_metadata', 'bullion_ops_muli_font_face_woff2', 10, 4 );
+
+	if ( ! is_string( $css ) || false === stripos( $css, 'Muli' ) ) {
+		return $value;
+	}
+	$css = bullion_ops_muli_css_to_woff2( $css );
+
+	return $single ? $css : [ $css ];
+}
+
+// The theme's Additional CSS (Customizer, post 9534 on live) carries its own
+// Muli .ttf @font-face rules too. Same rewrite.
+add_filter( 'wp_get_custom_css', 'bullion_ops_muli_css_to_woff2' );
+
+function bullion_ops_muli_css_to_woff2( $css ) {
+	if ( ! is_string( $css ) || false === stripos( $css, 'Muli' ) ) {
+		return $css;
+	}
+	$base  = plugins_url( 'assets/fonts', __FILE__ );
+	$files = [
+		100 => 'Muli-Regular.woff2', 200 => 'Muli-Regular.woff2', 300 => 'Muli-Regular.woff2',
+		400 => 'Muli-SemiBold.woff2', 500 => 'Muli-Bold.woff2',
+		600 => 'Muli-ExtraBold.woff2', 700 => 'Muli-Black.woff2',
+	];
+	return preg_replace_callback( '#@font-face\s*\{[^}]*\}#i', function ( $m ) use ( $base, $files ) {
+		$block = $m[0];
+		if ( false === stripos( $block, 'Muli' ) || ! preg_match( '#font-weight:\s*(\d+)#i', $block, $w ) ) {
+			return $block;
+		}
+		$weight = (int) $w[1];
+		if ( ! isset( $files[ $weight ] ) ) {
+			return $block;
+		}
+		$src = "src: url('" . esc_url( "{$base}/{$files[$weight]}" ) . "') format('woff2');";
+		$block = preg_replace( '#src:[^;]*;#i', $src, $block );
+		return preg_replace( '#font-display:\s*\w+#i', 'font-display: swap', $block );
+	}, $css );
+}
+
+// One-off: clear Elementor's generated CSS so every page rebuilds with the
+// WOFF2 rules above. Runs once per site.
+add_action( 'init', function () {
+	if ( '1' === get_option( 'bullion_ops_muli_css_cleared' ) || ! class_exists( '\Elementor\Plugin' ) ) {
+		return;
+	}
+	\Elementor\Plugin::$instance->files_manager->clear_cache();
+	update_option( 'bullion_ops_muli_css_cleared', '1' );
+}, 99 );
 
 // --- Font + script perf trial, DEV ONLY (v0.9.58) --------------------------
 //
