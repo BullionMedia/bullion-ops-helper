@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.97
+ * Version: 0.9.98
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.97' );
+define( 'BULLION_OPS_VERSION', '0.9.98' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1222,6 +1222,28 @@ add_filter( 'rocket_usedcss_content', 'bullion_ops_muli_css_to_woff2', 20 );
 add_filter( 'rocket_preload_fonts_excluded_fonts', function ( $fonts ) {
 	return array_merge( (array) $fonts, [ '/uploads/2024/03/Muli-' ] );
 } );
+
+// v0.9.98. The exclusion above applies only when WP Rocket next DETECTS fonts;
+// the list it already saved kept preloading Muli-SemiBold.ttf. Swap any old
+// Muli .ttf in its head items for the bundled WOFF2, or drop it.
+add_filter( 'rocket_head_items', function ( $items ) {
+	if ( ! is_array( $items ) ) {
+		return $items;
+	}
+	$dir = plugin_dir_path( __FILE__ ) . 'assets/fonts/';
+	foreach ( $items as $i => $item ) {
+		$href = is_array( $item ) && isset( $item['href'] ) ? (string) $item['href'] : '';
+		if ( ! preg_match( '#/uploads/\d{4}/\d{2}/(Muli-[A-Za-z]+)(?:-\d+)?\.ttf#', $href, $m ) ) {
+			continue;
+		}
+		if ( file_exists( $dir . $m[1] . '.woff2' ) ) {
+			$items[ $i ]['href'] = plugins_url( 'assets/fonts/' . $m[1] . '.woff2', __FILE__ );
+		} else {
+			unset( $items[ $i ] );
+		}
+	}
+	return $items;
+}, 31 );
 
 // The theme's Additional CSS (Customizer, post 9534 on live) carries its own
 // Muli .ttf @font-face rules too. Same rewrite.
