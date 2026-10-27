@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.95
+ * Version: 0.9.96
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.95' );
+define( 'BULLION_OPS_VERSION', '0.9.96' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1213,6 +1213,16 @@ function bullion_ops_muli_fonts_option_woff2( $fonts ) {
 	return $fonts;
 }
 
+// v0.9.96. WP Rocket's Remove Unused CSS keeps its own rebuilt copy of every
+// stylesheet, and on live that copy still carried the Muli .ttf rules after
+// both filters above were in place. Rewrite it as WP Rocket outputs it
+// (RUCSS/Controller/UsedCSS.php:449), and stop its automatic font preload
+// from picking an old .ttf (it preloaded Muli-SemiBold.ttf on /research/).
+add_filter( 'rocket_usedcss_content', 'bullion_ops_muli_css_to_woff2', 20 );
+add_filter( 'rocket_preload_fonts_excluded_fonts', function ( $fonts ) {
+	return array_merge( (array) $fonts, [ '/uploads/2024/03/Muli-' ] );
+} );
+
 // The theme's Additional CSS (Customizer, post 9534 on live) carries its own
 // Muli .ttf @font-face rules too. Same rewrite.
 add_filter( 'wp_get_custom_css', 'bullion_ops_muli_css_to_woff2' );
@@ -1236,8 +1246,10 @@ function bullion_ops_muli_css_to_woff2( $css ) {
 		if ( ! isset( $files[ $weight ] ) ) {
 			return $block;
 		}
-		$src = "src: url('" . esc_url( "{$base}/{$files[$weight]}" ) . "') format('woff2');";
-		$block = preg_replace( '#src:[^;]*;#i', $src, $block );
+		// No trailing `;` in either: minified CSS (RUCSS) ends the last
+		// declaration at the `}` with no semicolon.
+		$src = "src: url('" . esc_url( "{$base}/{$files[$weight]}" ) . "') format('woff2')";
+		$block = preg_replace( '#src:[^;}]*#i', $src, $block );
 		return preg_replace( '#font-display:\s*\w+#i', 'font-display: swap', $block );
 	}, $css );
 }
