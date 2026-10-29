@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.98
+ * Version: 0.9.99
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.98' );
+define( 'BULLION_OPS_VERSION', '0.9.99' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -2998,7 +2998,7 @@ function bullion_ops_render_insights_featured( $atts ) {
 	// eager, not lazy: this panel is above the fold and is the page's LCP
 	// candidate. The grid cards below it stay lazy.
 	$thumb_html = has_post_thumbnail( $id )
-		? get_the_post_thumbnail( $id, 'full', [ 'loading' => 'eager', 'decoding' => 'async' ] )
+		? get_the_post_thumbnail( $id, 'full', bullion_ops_insights_thumb_attrs( $id, $title, [ 'loading' => 'eager', 'decoding' => 'async' ] ) )
 		: '';
 
 	$visual_text_html = $visual
@@ -3101,7 +3101,7 @@ function bullion_ops_render_insights_grid( $atts ) {
 		$visual   = bullion_ops_get_insights_visual_text( $post_obj->post_name, $title );
 
 		$thumb_html = has_post_thumbnail( $id )
-			? get_the_post_thumbnail( $id, 'medium_large', [ 'loading' => 'lazy', 'decoding' => 'async' ] )
+			? get_the_post_thumbnail( $id, 'medium_large', bullion_ops_insights_thumb_attrs( $id, $title, [ 'loading' => 'lazy', 'decoding' => 'async' ] ) )
 			: '';
 
 		$words = str_word_count( wp_strip_all_tags( strip_shortcodes( $post_obj->post_content ) ) );
@@ -3141,6 +3141,94 @@ function bullion_ops_render_insights_grid( $atts ) {
 		return '<div class="qm-insights-grid">' . $cards . '</div>';
 	}
 	return $cards;
+}
+
+// Card and featured images fall back to the article title for alt text when
+// the image itself has none (v0.9.99). Two of the five /insights/ images
+// shipped with alt="" because alt lives on the media item, not the article,
+// and nothing in the publish flow sets it.
+function bullion_ops_insights_thumb_attrs( $post_id, $title, $attrs ) {
+	$thumb_id = get_post_thumbnail_id( $post_id );
+	$alt      = $thumb_id ? trim( (string) get_post_meta( $thumb_id, '_wp_attachment_image_alt', true ) ) : '';
+	if ( '' === $alt ) {
+		$attrs['alt'] = wp_strip_all_tags( (string) $title );
+	}
+	return $attrs;
+}
+
+// --- Insights hub CollectionPage schema (v0.9.99) --------------------------
+//
+// Replaces two hand-written ld+json blocks that sat in the /insights/ page
+// body. Audited 15 Sep 2026 and still wrong on 30 Oct: the ItemList named
+// 1 of the 5 articles on the page, dateModified was frozen at 27 May, and a
+// standalone BreadcrumbList duplicated Rank Math's ("Insights" vs "QMines
+// Insights"). Same rot as the Featured panel fixed in v0.9.64: anything
+// hand-coded on this page goes stale the moment an article ships.
+//
+// The list comes from bullion_ops_get_pillar_hero_slugs(), the same source as
+// the cards, so a new pillar/cluster article appears here automatically.
+// dateModified is the latest of the hub and its articles. No BreadcrumbList:
+// Rank Math's is canonical site-wide.
+add_action( 'wp_head', 'bullion_ops_insights_collection_schema', 30 );
+
+function bullion_ops_insights_collection_schema() {
+	if ( ! is_page( 'insights' ) ) {
+		return;
+	}
+	$hub = get_queried_object();
+	if ( ! $hub instanceof WP_Post ) {
+		return;
+	}
+
+	$slugs    = bullion_ops_get_pillar_hero_slugs();
+	$articles = empty( $slugs ) ? [] : get_posts( [
+		'post_type'        => 'page',
+		'post_status'      => 'publish',
+		'post_name__in'    => array_values( $slugs ),
+		'posts_per_page'   => -1,
+		'orderby'          => [ 'parent' => 'ASC', 'date' => 'DESC' ],
+		'suppress_filters' => false,
+	] );
+
+	$latest = strtotime( $hub->post_modified_gmt . ' UTC' );
+	$items  = [];
+	foreach ( $articles as $i => $p ) {
+		$items[] = [
+			'@type'    => 'ListItem',
+			'position' => $i + 1,
+			'url'      => get_permalink( $p ),
+			'name'     => wp_strip_all_tags( get_the_title( $p ) ),
+		];
+		$latest = max( $latest, strtotime( $p->post_modified_gmt . ' UTC' ) );
+	}
+
+	$home   = home_url( '/' );
+	$schema = [
+		'@context'      => 'https://schema.org',
+		'@type'         => 'CollectionPage',
+		'name'          => 'Critical Minerals Insights',
+		'datePublished' => get_the_date( 'Y-m-d', $hub ),
+		'dateModified'  => wp_date( 'c', $latest ),
+		'description'   => 'Copper, Gold and Critical Minerals analysis from inside an ASX developer.',
+		'url'           => get_permalink( $hub ),
+		'keywords'      => 'critical minerals, copper, gold, ASX resource development, copper investment, junior mining, energy transition',
+		'about'         => [
+			[ '@type' => 'Thing', 'name' => 'Critical minerals' ],
+			[ '@type' => 'Thing', 'name' => 'Copper' ],
+			[ '@type' => 'Thing', 'name' => 'Gold' ],
+			[ '@type' => 'Thing', 'name' => 'ASX mining' ],
+		],
+		'isPartOf'      => [ '@type' => 'WebSite', 'name' => 'QMines Limited (ASX:QML)', 'url' => $home ],
+		'publisher'     => [
+			'@type'  => 'Organization',
+			'name'   => 'QMines Limited',
+			'url'    => $home,
+			'sameAs' => [ 'https://www.asx.com.au/markets/company/qml' ],
+		],
+		'mainEntity'    => [ '@type' => 'ItemList', 'numberOfItems' => count( $items ), 'itemListElement' => $items ],
+	];
+
+	echo '<script type="application/ld+json">' . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "</script>\n";
 }
 
 // Overlay-text label for .qm-insights-card-visual-text, hovering over the
