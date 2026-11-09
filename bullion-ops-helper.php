@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.9.99
+ * Version: 0.10.0
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.9.99' );
+define( 'BULLION_OPS_VERSION', '0.10.0' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -4999,3 +4999,17 @@ add_action( 'wp_head', function() {
 	];
 	echo "<script type=\"application/ld+json\">" . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "</script>\n";
 }, 30 );
+
+// --- noindex on RSS feeds (v0.10.0, 2026-11-10)
+//
+// Search Console listed four feed URLs under "Crawled - currently not indexed"
+// (incl. the {search_term_string} template feed from the SearchAction schema),
+// so every "Validate fix" on that issue failed and emailed. Feeds are machine
+// files, never search results; noindex moves them to "Excluded by noindex".
+// PDFs deliberately NOT included: operator kept analyst reports indexable.
+// template_redirect, not send_headers: is_feed() is not set until the query runs.
+add_action( 'template_redirect', function() {
+	if ( is_feed() && ! headers_sent() ) {
+		header( 'X-Robots-Tag: noindex, follow', true );
+	}
+}, 1 );
