@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.10.2
+ * Version: 0.10.3
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.10.2' );
+define( 'BULLION_OPS_VERSION', '0.10.3' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1541,7 +1541,7 @@ function bullion_ops_get_project_faq_data() {
 				[ 'q' => 'What copper and gold does Mt Chalmers contain?',      'a' => 'Mt Chalmers contains copper, gold, zinc, silver, and pyrite mineralisation. The Pre-Feasibility Study defined a contained metal inventory of 65,000 tonnes of copper, 160,000 ounces of gold, 30,600 tonnes of zinc, 1.8 million ounces of silver, and 583,000 tonnes of pyrite.' ],
 				[ 'q' => 'What is the JORC resource at Mt Chalmers?',           'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.3Mt at 0.75% copper, 0.42g/t gold, 0.23% zinc and 4.60g/t silver. 88% of these Resources fall in the Measured and Indicated <a href="/is-copper-a-good-investment/what-is-a-jorc-resource/">JORC categories</a>, with a further Ore Reserve of 9.6Mt (Proved 5.1Mt and Probable 4.5Mt).' ],
 				[ 'q' => 'What did the Mt Chalmers Pre-Feasibility Study find?', 'a' => 'The Pre-Feasibility Study returned a pre-tax Net Present Value (NPV8) of $373 million and a 54% Internal Rate of Return, based on a stand-alone 1Mtpa processing plant with a 10.4 year initial mine life and a capital cost estimate of A$191 million. The study also declared a maiden Ore Reserve of 9.6Mt (Proved and Probable).' ],
-				[ 'q' => 'When is the Mt Chalmers DFS due?',                    'a' => 'The Definitive Feasibility Study (DFS) for Mt Chalmers is currently underway. QMines announced a fully-funded DFS delivery program in 2026 and has committed to delivering the DFS results later that year. Updates are released via the ASX as the program progresses.' ],
+				[ 'q' => 'When is the Mt Chalmers DFS due?',                    'a' => 'The Mt Chalmers Definitive Feasibility Study (DFS) is underway and fully funded. It commenced on 10 February 2026, with a A$15m QIC funding package supporting the pathway towards a Final Investment Decision (FID). DFS workstreams continued to advance in the September 2026 quarter, with drilling delivering metallurgical, geological and waste-characterisation inputs for mine and process design, while development financing discussions run alongside the study, and updates are released via the ASX.' ],
 				[ 'q' => 'What stage of development is Mt Chalmers at?',        'a' => 'Mt Chalmers is in the development phase with a completed Pre-Feasibility Study, declared Ore Reserve, and a Definitive Feasibility Study underway. QMines\' strategy involves transitioning the project toward production, leveraging its shallow high-grade open-pit geometry, coastal proximity, and existing infrastructure access.' ],
 				[ 'q' => 'Who owns Mt Chalmers?',                               'a' => 'QMines Limited (ASX:QML) holds 100% of the Mt Chalmers project.' ],
 			],
