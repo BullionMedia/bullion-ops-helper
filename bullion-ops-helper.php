@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.10.1
+ * Version: 0.10.2
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.10.1' );
+define( 'BULLION_OPS_VERSION', '0.10.2' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1878,8 +1878,60 @@ function bullion_ops_inject_pillar_hero_css() {
 	margin: 0 8px !important;
 	color: rgba(255,255,255,.4) !important;
 }
+/* v0.10.2: "All articles" link, bottom-right of the title panel */
+.asx-article-header .asx-article-back {
+	position: absolute !important;
+	right: 50px !important;
+	bottom: 40px !important;
+	color: #4CA565 !important;
+	font-size: 0.9em !important;
+	font-weight: 600 !important;
+	text-decoration: none !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	white-space: nowrap !important;
+}
+.asx-article-header .asx-article-back:hover,
+.asx-article-header .asx-article-back:focus-visible { color: #6fcf8a !important; text-decoration: underline !important; }
+.asx-article-header .asx-article-meta { padding-right: 130px !important; }
+@media (max-width: 640px) {
+	.asx-article-header .asx-article-back { position: static !important; display: inline-block !important; margin-top: 14px !important; }
+	.asx-article-header .asx-article-meta { padding-right: 0 !important; }
+}
 </style>
 	<?php
+}
+
+// --- "All articles" link in the title panel (v0.10.2) ----------------------
+//
+// Operator, 11 Nov 2026: every article's navy title panel carries a link back
+// to the Insights hub, bottom-right, in brand green. Added at render rather
+// than in each page's content so every enrolled pillar / cluster page gets it,
+// including ones published later, without touching post content (an edit
+// would bump post_modified and with it the visible "Updated" date).
+// Priority 4: after the header auto-wrap (3), before the meta refresh (5).
+
+add_filter( 'the_content', 'bullion_ops_article_back_link', 4 );
+
+function bullion_ops_article_back_link( $content ) {
+	if ( is_admin() || ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
+		return $content;
+	}
+	$post = get_post();
+	if ( ! $post || ! in_array( $post->post_name, bullion_ops_get_pillar_hero_slugs(), true ) ) {
+		return $content;
+	}
+	if ( false !== strpos( $content, 'asx-article-back' ) ) {
+		return $content;
+	}
+	$open = '<div class="asx-article-header">';
+	$pos  = strpos( $content, $open );
+	if ( false === $pos ) {
+		return $content;
+	}
+	$link = '<a class="asx-article-back" href="' . esc_url( home_url( '/insights/' ) ) . '">&larr; All articles</a>';
+	$at   = $pos + strlen( $open );
+	return substr( $content, 0, $at ) . $link . substr( $content, $at );
 }
 
 // --- Article registry, editable over REST (v0.9.53) ------------------------
