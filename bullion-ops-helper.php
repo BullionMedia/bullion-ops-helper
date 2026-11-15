@@ -3,7 +3,7 @@
  * Plugin Name: Bullion Ops Helper
  * Plugin URI: https://github.com/BullionMedia/bullion-ops-helper
  * Description: REST endpoints for programmatic Rank Math redirects, Elementor regenerate, cache purges, a branded restyle of the asx_announcement CPT archive, FAQ JSON-LD schema injection on QMines project pages, shared CSS for In Summary / FAQ blocks, the [qmines_project_faq] shortcode for Elementor placement, pillar-hero styling (featured-image band + floating title panel) for QMines pillar / cluster pages, and asx_announcement CPT sitemap force-inclusion. Used by Bullion Media ops tooling.
- * Version: 0.10.3
+ * Version: 0.10.4
  * Author: Bullion Media
  * Author URI: https://bullionmedia.com.au
  * License: MIT
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'BULLION_OPS_NS', 'bullion/v1' );
-define( 'BULLION_OPS_VERSION', '0.10.3' );
+define( 'BULLION_OPS_VERSION', '0.10.4' );
 
 // --- Auto-update (Plugin Update Checker, GitHub source) --------------------
 //
@@ -1534,10 +1534,10 @@ function bullion_ops_render_project_faq_jsonld( $page ) {
 function bullion_ops_get_project_faq_data() {
 	$map = [
 		'mt-chalmers' => [
-			'in_summary' => 'Mt Chalmers is QMines\' flagship development project, a high-grade copper-gold deposit 17km from Rockhampton with a completed Pre-Feasibility Study, a declared 9.6Mt Ore Reserve, and a current <a href="/is-copper-a-good-investment/what-is-a-jorc-resource/">JORC resource</a> of 11.3Mt at 0.75% copper and 0.42g/t gold. The project\'s shallow open-pit geometry, proximity to established infrastructure, and 316km² of tenure underpin QMines\' strategy of transitioning Mt Chalmers toward production. With 88% of resources in the Measured and Indicated JORC categories, Mt Chalmers represents the company\'s most advanced asset and its primary value-creation pathway.',
+			'in_summary' => 'Mt Chalmers is QMines\' flagship development project, a high-grade copper-gold deposit 17km from Rockhampton with a completed Pre-Feasibility Study, a declared 9.6Mt Ore Reserve, and a current <a href="/is-copper-a-good-investment/what-is-a-jorc-resource/">JORC resource</a> of 11.3Mt at 0.75% copper and 0.42g/t gold. The project\'s shallow open-pit geometry, proximity to established infrastructure, and seven exploration tenements underpin QMines\' strategy of transitioning Mt Chalmers toward production. With 88% of resources in the Measured and Indicated JORC categories, Mt Chalmers represents the company\'s most advanced asset and its primary value-creation pathway.',
 			'faqs' => [
 				[ 'q' => 'What is the Mt Chalmers copper-gold project?',        'a' => 'The Mt Chalmers copper-gold project is QMines\' flagship development asset in Central Queensland, located 17km north-east of Rockhampton. It is a past-producing high-grade copper and gold mine that operated between 1898 and 1982, now being redeveloped by QMines with a completed Pre-Feasibility Study, a declared Ore Reserve, and a Definitive Feasibility Study underway. The project holds a current JORC resource of 11.3Mt at 0.75% copper and 0.42g/t gold and forms the processing centre of QMines\' Multi-Project Copper & Gold Production Hub.' ],
-				[ 'q' => 'Where is Mt Chalmers located?',                       'a' => 'Mt Chalmers is located 17km north-east of Rockhampton in Queensland, Australia. QMines holds 316km² of tenure at the project.' ],
+				[ 'q' => 'Where is Mt Chalmers located?',                       'a' => 'Mt Chalmers is located 17km north-east of Rockhampton in Queensland, Australia. QMines holds seven exploration tenements at the project, plus a Mining Lease application, ML 100403.' ],
 				[ 'q' => 'What copper and gold does Mt Chalmers contain?',      'a' => 'Mt Chalmers contains copper, gold, zinc, silver, and pyrite mineralisation. The Pre-Feasibility Study defined a contained metal inventory of 65,000 tonnes of copper, 160,000 ounces of gold, 30,600 tonnes of zinc, 1.8 million ounces of silver, and 583,000 tonnes of pyrite.' ],
 				[ 'q' => 'What is the JORC resource at Mt Chalmers?',           'a' => 'The Mt Chalmers Measured, Indicated and Inferred Resource stands at 11.3Mt at 0.75% copper, 0.42g/t gold, 0.23% zinc and 4.60g/t silver. 88% of these Resources fall in the Measured and Indicated <a href="/is-copper-a-good-investment/what-is-a-jorc-resource/">JORC categories</a>, with a further Ore Reserve of 9.6Mt (Proved 5.1Mt and Probable 4.5Mt).' ],
 				[ 'q' => 'What did the Mt Chalmers Pre-Feasibility Study find?', 'a' => 'The Pre-Feasibility Study returned a pre-tax Net Present Value (NPV8) of $373 million and a 54% Internal Rate of Return, based on a stand-alone 1Mtpa processing plant with a 10.4 year initial mine life and a capital cost estimate of A$191 million. The study also declared a maiden Ore Reserve of 9.6Mt (Proved and Probable).' ],
@@ -1551,7 +1551,7 @@ function bullion_ops_get_project_faq_data() {
 			'faqs' => [
 				[ 'q' => 'Who owns the Develin Creek copper project?',          'a' => 'QMines Limited (ASX:QML) owns 100% of the Develin Creek copper-zinc project. QMines completed the acquisition from Zenith Minerals Limited on 30 September 2024. The project is located approximately 90km west of Rockhampton in Queensland.' ],
 				[ 'q' => 'What is the Develin Creek copper project?',           'a' => 'Develin Creek is a 100%-owned QMines copper-zinc project located approximately 90km west of Rockhampton, Queensland. It hosts a JORC Mineral Resource of 4.70Mt at 0.94% copper and 1.0% zinc across several Volcanic Hosted Massive Sulphide (VHMS) deposits, with 90% of the resource in the Indicated category. Its proximity to QMines\' flagship Mt Chalmers project positions Develin Creek as a satellite feed source for the Multi-Project Copper & Gold Production Hub.' ],
-				[ 'q' => 'Where is the Develin Creek project located?',         'a' => 'Develin Creek is located approximately 90km west of Rockhampton in Queensland, Australia. The project covers EPM 17604 and EPM 16749, totalling 272km² of tenure.' ],
+				[ 'q' => 'Where is the Develin Creek project located?',         'a' => 'Develin Creek is located approximately 90km west of Rockhampton in Queensland, Australia. The project covers five tenements: EPM 16749, EPM 17604, EPM 29378, EPM 29379 (application) and EPM 29380.' ],
 				[ 'q' => 'What commodities does Develin Creek contain?',        'a' => 'Develin Creek contains copper, zinc, gold and silver mineralisation hosted in several Volcanic Hosted Massive Sulphide (VHMS) deposits, including the Sulphide City, Scorpion and Window deposits.' ],
 				[ 'q' => 'What is the JORC resource estimate for Develin Creek?', 'a' => 'The Develin Creek Resource stands at 4.70Mt at 0.94% Cu and 1.0% Zn, containing approximately 44,200 tonnes of copper and 47,400 tonnes of zinc. 90% of this Resource sits in the Indicated JORC category.' ],
 				[ 'q' => 'When did QMines acquire Develin Creek?',              'a' => 'QMines completed the 100% acquisition of the Develin Creek copper and zinc project from Zenith Minerals Limited on 30 September 2024.' ],
